@@ -1,0 +1,24 @@
+[project]
+name = "online-cinema"
+version = "0.1.0"
+description = "An online cinema is a digital platform that allows users to select, watch, and purchase access to movies and other video materials via the internet. These services have become popular due to their convenience, a wide selection of content, and the ability to personalize the user experience."
+authors = [
+    {name = "illa-j",email = "iliacdmn@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi[standard] (>=0.135.1,<0.136.0)",
+    "alembic (>=1.18.4,<2.0.0)",
+    "sqlalchemy (>=2.0.48,<3.0.0)",
+    "python-jose (>=3.5.0,<4.0.0)",
+    "psycopg2-binary (>=2.9.11,<3.0.0)",
+    "asyncpg (>=0.31.0,<0.32.0)",
+    "gunicorn (>=25.1.0,<26.0.0)",
+    "uvicorn (>=0.41.0,<0.42.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
