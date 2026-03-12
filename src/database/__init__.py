@@ -1,1 +1,13 @@
-from database.session_postgresql import get_db, Base
+import os
+
+from database.models.base import Base
+from database.models.accounts import (
+    UserModel,
+    UserGroupModel,
+    UserGroupEnum,
+    ActivationTokenModel,
+    PasswordResetTokenModel,
+    RefreshTokenModel,
+    UserProfileModel
+)
+

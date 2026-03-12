@@ -5,7 +5,9 @@ from sqlalchemy import pool
 
 from alembic import context
 
-from database.session_postgresql import Base, sync_postgresql_engine
+
+from database.session_postgresql import sync_postgresql_engine
+from database.models.base import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
