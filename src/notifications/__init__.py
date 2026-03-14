@@ -1,0 +1,1 @@
+from notifications.emails import send_activation_email
