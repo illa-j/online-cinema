@@ -1,1 +1,1 @@
-from notifications.emails import send_activation_email
+from notifications.emails import send_activation_email, send_activation_complete_email
