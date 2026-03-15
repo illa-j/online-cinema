@@ -9,12 +9,12 @@ celery = Celery(
     "worker",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["celery_app.tasks"]
+    include=["celery_app.tasks"],
 )
 
 celery.conf.beat_schedule = {
-    "cleanup-every-10-minutes": {
+    "cleanup-every-30-minutes": {
         "task": "celery_app.tasks.clean_up_activation_tokens",
-        "schedule": 600.0,
-    },
+        "schedule": crontab(minute="*/30"),
+    }
 }
