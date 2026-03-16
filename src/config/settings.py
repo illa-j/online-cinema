@@ -19,7 +19,8 @@ class Settings(BaseAppSettings):
     CELERY_RESULT_BACKEND: str = "redis://redis:6379/1"
     SECRET_KEY_ACCESS: str
     SECRET_KEY_REFRESH: str
-    JWT_SIGNING_ALGORITHM: str = "HS256",
+    JWT_SIGNING_ALGORITHM: str = ("HS256",)
     MAIL_USERNAME: str
     MAIL_PASSWORD: str
     MAIL_FROM: str
+    LOGIN_TIME_DAYS: int = 7

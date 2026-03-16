@@ -1,6 +1,4 @@
-import asyncio
 from datetime import datetime, timezone
-from typing import cast
 
 from sqlalchemy import select, delete
 from sqlalchemy.orm import joinedload
@@ -11,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 
 from database.models.accounts import (
     ActivationTokenModel,
+    RefreshTokenModel,
     UserModel,
     UserGroupModel,
     UserGroupEnum,
@@ -20,8 +19,16 @@ from schemas import (
     UserRegistrationResponseSchema,
     UserRegistrationRequestSchema,
     UserActivationRequestSchema,
+    MessageResponseSchema,
+    UserLoginRequestSchema,
+    UserLoginResponseSchema,
 )
 from notifications import send_activation_email, send_activation_complete_email
+from security.interfaces import JWTAuthManagerInterface
+from config import get_jwt_auth_manager, get_settings
+from security.utils import generate_secure_token
+
+settings = get_settings()
 
 router = APIRouter()
 
@@ -60,7 +67,10 @@ async def register_user(
         db.add(new_user)
         await db.flush()
 
+        activation_token = generate_secure_token()
+
         token = ActivationTokenModel(user_id=new_user.id)
+        token.token = activation_token
         db.add(token)
 
         await db.commit()
@@ -75,13 +85,13 @@ async def register_user(
     background_tasks.add_task(
         send_activation_email,
         new_user.email,
-        token.token,
+        activation_token,
         f"http://127.0.0.1:8000/api/v1/accounts/activate/",
     )
     return UserRegistrationResponseSchema(id=new_user.id, email=new_user.email)
 
 
-@router.post("/activate/", response_model=dict[str, str])
+@router.post("/activate/", response_model=MessageResponseSchema)
 async def activate_user(
     activation_data: UserActivationRequestSchema,
     background_tasks: BackgroundTasks,
@@ -93,7 +103,6 @@ async def activate_user(
         .join(ActivationTokenModel)
         .where(
             UserModel.email == activation_data.email,
-            ActivationTokenModel.token == activation_data.token,
         )
     )
     user = stmt.scalars().first()
@@ -108,8 +117,15 @@ async def activate_user(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="User is already activated."
         )
+    user_activation_token = user.activation_tokens[0]
 
-    if user.activation_tokens[0].expires_at < datetime.now(timezone.utc):
+    if not user_activation_token.verify_token(activation_data.token):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email or activation token.",
+        )
+
+    if user_activation_token.expires_at < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Token has been expired. Try to renew token.",
@@ -134,10 +150,10 @@ async def activate_user(
         user.email,
         "http://127.0.0.1:8000/api/v1/accounts/login",
     )
-    return {"message": "Account has been succefully activated."}
+    return MessageResponseSchema(message="Account has been successfully activated.")
 
 
-@router.post("/renew-activation-token/", response_model=dict[str, str])
+@router.post("/renew-activation-token/", response_model=MessageResponseSchema)
 async def renew_activation_token(
     email: str,
     background_tasks: BackgroundTasks,
@@ -161,7 +177,10 @@ async def renew_activation_token(
             delete(ActivationTokenModel).where(ActivationTokenModel.user_id == user.id)
         )
 
+        activation_token = generate_secure_token()
+
         new_token = ActivationTokenModel(user_id=user.id)
+        new_token.token = activation_token
         db.add(new_token)
 
         await db.commit()
@@ -175,7 +194,58 @@ async def renew_activation_token(
     background_tasks.add_task(
         send_activation_email,
         user.email,
-        new_token.token,
+        activation_token,
         f"http://127.0.0.1:8000/api/v1/accounts/activate/",
     )
-    return {"message": "New activation token has been sent."}
+    return MessageResponseSchema(message="New activation token has been sent.")
+
+
+@router.post("/login/", response_model=UserLoginResponseSchema)
+async def login_user(
+    login_data: UserLoginRequestSchema,
+    jwt_manager: JWTAuthManagerInterface = Depends(get_jwt_auth_manager),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = await db.execute(
+        select(UserModel).where(UserModel.email == login_data.email)
+    )
+    user = stmt.scalars().first()
+    if user is None or not user.verify_password(login_data.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password.",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is not activated.",
+        )
+
+    jwt_refresh_token = jwt_manager.create_refresh_token({"user_id": user.id})
+
+    try:
+        await db.execute(
+            delete(RefreshTokenModel).where(RefreshTokenModel.user_id == user.id)
+        )
+
+        refresh_token = RefreshTokenModel.create(
+            user_id=user.id,
+            days_valid=settings.LOGIN_TIME_DAYS,
+            token=jwt_refresh_token,
+        )
+        db.add(refresh_token)
+        await db.flush()
+        await db.commit()
+    except SQLAlchemyError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while processing the request.",
+        )
+
+    jwt_access_token = jwt_manager.create_access_token({"user_id": user.id})
+    return UserLoginResponseSchema(
+        access_token=jwt_access_token,
+        refresh_token=jwt_refresh_token,
+    )

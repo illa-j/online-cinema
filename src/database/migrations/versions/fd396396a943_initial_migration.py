@@ -1,8 +1,8 @@
 """initial migration
 
-Revision ID: 6357ab22ad32
+Revision ID: fd396396a943
 Revises: 
-Create Date: 2026-03-12 23:20:09.712211
+Create Date: 2026-03-16 18:44:53.341862
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '6357ab22ad32'
+revision: str = 'fd396396a943'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -41,33 +41,32 @@ def upgrade() -> None:
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
     op.create_table('activation_tokens',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-    sa.Column('token', sa.String(length=64), nullable=False),
+    sa.Column('_hashed_token', sa.String(length=60), nullable=False),
     sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('token'),
+    sa.UniqueConstraint('_hashed_token'),
     sa.UniqueConstraint('user_id')
     )
     op.create_table('password_reset_tokens',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-    sa.Column('token', sa.String(length=64), nullable=False),
+    sa.Column('_hashed_token', sa.String(length=60), nullable=False),
     sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('token'),
+    sa.UniqueConstraint('_hashed_token'),
     sa.UniqueConstraint('user_id')
     )
     op.create_table('refresh_tokens',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-    sa.Column('token', sa.String(length=64), nullable=False),
+    sa.Column('_hashed_token', sa.String(length=60), nullable=False),
     sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('token'),
-    sa.UniqueConstraint('user_id')
+    sa.UniqueConstraint('_hashed_token')
     )
     op.create_table('user_profiles',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),

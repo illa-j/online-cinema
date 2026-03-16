@@ -19,7 +19,7 @@ from sqlalchemy import (
 
 from database.validators import accounts as validators
 from database.models.base import Base
-from security.utils import generate_secure_token
+from security.tokens import hash_token, verify_token
 from security.passwords import hash_password, verify_password
 
 
@@ -159,9 +159,7 @@ class TokenBaseModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    token: Mapped[str] = mapped_column(
-        String(64), nullable=False, unique=True, default=generate_secure_token
-    )
+    _hashed_token: Mapped[str] = mapped_column(String(60), nullable=False, unique=True)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -170,6 +168,23 @@ class TokenBaseModel(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+
+    @property
+    def token(self) -> str:
+        raise AttributeError("Token is write-only. Use the setter to set the token.")
+
+    @token.setter
+    def token(self, value: str) -> None:
+        self._hashed_token = hash_token(value)
+
+    def verify_token(self, plain_token: str) -> bool:
+        """
+        Verify a plain-text token against the stored hashed token.
+
+        This method compares a plain-text token with the stored hashed token and returns True
+        if they match, and False otherwise.
+        """
+        return verify_token(plain_token, self._hashed_token)
 
 
 class ActivationTokenModel(TokenBaseModel):
@@ -182,7 +197,7 @@ class ActivationTokenModel(TokenBaseModel):
     __table_args__ = (UniqueConstraint("user_id"),)
 
     def __repr__(self):
-        return f"<ActivationTokenModel(id={self.id}, token={self.token}, expires_at={self.expires_at})>"
+        return f"<ActivationTokenModel(id={self.id}, expires_at={self.expires_at})>"
 
 
 class PasswordResetTokenModel(TokenBaseModel):
@@ -195,17 +210,27 @@ class PasswordResetTokenModel(TokenBaseModel):
     __table_args__ = (UniqueConstraint("user_id"),)
 
     def __repr__(self):
-        return f"<PasswordResetTokenModel(id={self.id}, token={self.token}, expires_at={self.expires_at})>"
+        return f"<PasswordResetTokenModel(id={self.id}, expires_at={self.expires_at})>"
 
 
 class RefreshTokenModel(TokenBaseModel):
     __tablename__ = "refresh_tokens"
 
-    user: Mapped["UserModel"] = relationship(
-        "UserModel", back_populates="refresh_tokens"
-    )
+    user: Mapped[UserModel] = relationship("UserModel", back_populates="refresh_tokens")
 
-    __table_args__ = (UniqueConstraint("user_id"),)
+    @classmethod
+    def create(cls, user_id: int, days_valid: int, token: str) -> "RefreshTokenModel":
+        """
+        Factory method to create a new RefreshTokenModel instance.
+
+        This method simplifies the creation of a new refresh token by calculating
+        the expiration date based on the provided number of valid days and setting
+        the required attributes.
+        """
+        expires_at = datetime.now(timezone.utc) + timedelta(days=days_valid)
+        instance = cls(user_id=user_id, expires_at=expires_at)
+        instance.token = token
+        return instance
 
     def __repr__(self):
-        return f"<RefreshTokenModel(id={self.id}, token={self.token}, expires_at={self.expires_at})>"
+        return f"<RefreshTokenModel(id={self.id}, expires_at={self.expires_at})>"
