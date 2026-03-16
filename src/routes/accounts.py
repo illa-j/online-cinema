@@ -15,6 +15,7 @@ from database.models.accounts import (
     UserGroupEnum,
 )
 from database.session_postgresql import get_db
+from exceptions.security import BaseSecurityError
 from schemas import (
     UserRegistrationResponseSchema,
     UserRegistrationRequestSchema,
@@ -249,3 +250,57 @@ async def login_user(
         access_token=jwt_access_token,
         refresh_token=jwt_refresh_token,
     )
+
+
+@router.post("/logout/", response_model=MessageResponseSchema)
+async def logout_user(
+    refresh_token: str,
+    jwt_manager: JWTAuthManagerInterface = Depends(get_jwt_auth_manager),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        payload = jwt_manager.decode_refresh_token(refresh_token)
+        user_id = payload.get("user_id")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token or expired.",
+            )
+
+        stmt = await db.execute(
+            select(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id)
+        )
+        user_refresh_token = stmt.scalars().first()
+
+        if user_refresh_token is None or not user_refresh_token.verify_token(
+            refresh_token
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token or expired.",
+            )
+
+        if user_refresh_token.expires_at < datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token or expired.",
+            )
+
+        await db.execute(
+            delete(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id)
+        )
+
+        await db.commit()
+    except BaseSecurityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token or expired."
+        )
+    except SQLAlchemyError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while processing the request.",
+        )
+
+    return MessageResponseSchema(message="Successfully logged out.")
