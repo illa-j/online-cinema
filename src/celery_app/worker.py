@@ -14,7 +14,7 @@ celery = Celery(
 
 celery.conf.beat_schedule = {
     "cleanup-every-30-minutes": {
-        "task": "celery_app.tasks.clean_up_activation_tokens",
+        "task": "celery_app.tasks.clean_up_expired_tokens",
         "schedule": crontab(minute="*/30"),
     }
 }

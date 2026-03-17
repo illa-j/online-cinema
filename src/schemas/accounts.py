@@ -28,6 +28,10 @@ class PasswordResetRequestSchema(BaseModel):
     email: EmailStr
 
 
+class ActivationTokenRenewalRequestSchema(BaseModel):
+    email: EmailStr
+
+
 class PasswordResetCompleteRequestSchema(BaseEmailPasswordSchema):
     token: str
 
@@ -47,6 +51,14 @@ class UserRegistrationResponseSchema(BaseModel):
     email: EmailStr
 
     model_config = {"from_attributes": True}
+
+
+class UserLogoutRequestSchema(BaseModel):
+    refresh_token: str
+
+
+class AccessTokenRenewalRequestSchema(BaseModel):
+    refresh_token: str
 
 
 class UserActivationRequestSchema(BaseModel):
