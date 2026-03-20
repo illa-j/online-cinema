@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import select, delete
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +30,8 @@ from schemas import (
     ActivationTokenRenewalRequestSchema,
     UserLogoutRequestSchema,
     AccessTokenRenewalRequestSchema,
+    ChangeUserGroupRequestSchema,
+    UserResetPasswordRequestSchema,
 )
 from notifications import (
     send_activation_email,
@@ -38,7 +40,7 @@ from notifications import (
     send_password_reset_complete_email,
 )
 from security.interfaces import JWTAuthManagerInterface
-from config import get_jwt_auth_manager, get_settings
+from config import get_jwt_auth_manager, get_settings, get_current_user
 from security.utils import generate_secure_token
 
 settings = get_settings()
@@ -328,11 +330,6 @@ async def renew_access_token(
     try:
         payload = jwt_manager.decode_refresh_token(data.refresh_token)
         user_id = payload.get("user_id")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token or expired.",
-            )
     except BaseSecurityError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token or expired."
@@ -358,6 +355,39 @@ async def renew_access_token(
 
     jwt_access_token = jwt_manager.create_access_token({"user_id": user_id})
     return TokenRefreshResponseSchema(access_token=jwt_access_token)
+
+
+@router.post("/password-reset/", response_model=MessageResponseSchema)
+async def password_reset_request(
+    data: UserResetPasswordRequestSchema,
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = await db.execute(select(UserModel).where(UserModel.email == data.email))
+    user = stmt.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect password or email.",
+        )
+
+    if not user.verify_password(data.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect password or email.",
+        )
+
+    try:
+        user.password = data.new_password
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while processing the request.",
+        ) from e
+
+    return MessageResponseSchema(message="User password was updated succesfully.")
 
 
 @router.post("/password-reset-request/", response_model=MessageResponseSchema)
@@ -471,3 +501,119 @@ async def password_reset_complete(
         "http://127.0.0.1:8000/api/v1/accounts/login",
     )
     return MessageResponseSchema(message="Password has been successfully reset.")
+
+
+@router.patch("/{user_id}/change-group/", response_model=MessageResponseSchema)
+async def change_user_group(
+    user_id: int,
+    data: ChangeUserGroupRequestSchema,
+    current_user_id: int = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = await db.execute(
+        select(UserModel)
+        .options(selectinload(UserModel.group))
+        .where(UserModel.id == current_user_id)
+    )
+    current_user = stmt.scalar_one_or_none()
+
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User was not found."
+        )
+
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive."
+        )
+
+    if current_user.group.name != UserGroupEnum.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions."
+        )
+
+    stmt = await db.execute(
+        select(UserModel)
+        .options(selectinload(UserModel.group))
+        .where(UserModel.id == user_id)
+    )
+    user = stmt.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
+        )
+
+    stmt = await db.execute(
+        select(UserGroupModel).where(UserGroupModel.name == data.group)
+    )
+    user_group = stmt.scalars().first()
+    if user_group is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User group not found.",
+        )
+
+    try:
+        user.group = user_group
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during password reset.",
+        ) from e
+
+    return MessageResponseSchema(message="User group was updated succefully.")
+
+
+@router.patch("/{user_id}/activate/", response_model=MessageResponseSchema)
+async def activate_user_manually(
+    user_id: int,
+    current_user_id: int = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = await db.execute(
+        select(UserModel)
+        .options(selectinload(UserModel.group))
+        .where(UserModel.id == current_user_id)
+    )
+    current_user = stmt.scalar_one_or_none()
+
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User was not found."
+        )
+
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive."
+        )
+
+    if current_user.group.name != UserGroupEnum.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions."
+        )
+
+    stmt = await db.execute(select(UserModel).where(UserModel.id == user_id))
+    user = stmt.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User was not found."
+        )
+
+    if user.is_active:
+        return MessageResponseSchema(message="User has already been activated.")
+
+    try:
+        user.is_active = True
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during password reset.",
+        ) from e
+
+    return MessageResponseSchema(message="User was activated succefully.")

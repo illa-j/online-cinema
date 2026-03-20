@@ -9,4 +9,9 @@ from schemas.accounts import (
     MessageResponseSchema,
     TokenRefreshRequestSchema,
     TokenRefreshResponseSchema,
+    ChangeUserGroupRequestSchema,
+    AccessTokenRenewalRequestSchema,
+    ActivationTokenRenewalRequestSchema,
+    UserLogoutRequestSchema,
+    UserResetPasswordRequestSchema,
 )
