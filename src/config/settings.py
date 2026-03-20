@@ -20,6 +20,8 @@ class Settings(BaseAppSettings):
     SECRET_KEY_ACCESS: str
     SECRET_KEY_REFRESH: str
     JWT_SIGNING_ALGORITHM: str = ("HS256",)
+    MAIL_HOST: str
+    MAIL_PORT: str
     MAIL_USERNAME: str
     MAIL_PASSWORD: str
     MAIL_FROM: str

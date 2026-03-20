@@ -8,7 +8,7 @@ services:
       - "5432:5432"
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-      - postgres_theater_data:/var/lib/postgresql/data/
+      - postgres_theater_data:/var/lib/postgresql
     networks:
       - theater_network
     healthcheck:
@@ -17,12 +17,29 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    restart: unless-stopped
+
+  redis:
+    image: 'redis:latest'
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - theater_network
 
   web:
     restart: always
     build: .
     container_name: backend_theater
-    command: [ "/bin/bash", "/commands/run_web_server_dev.sh" ]
+    command: [ "/bin/bash", "/commands/run_web_server_prod.sh" ]
     env_file:
       - .env
     environment:
@@ -34,11 +51,73 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./src:/usr/src/fastapi
     networks:
       - theater_network
-  
+
+  celery_worker:
+    build:
+      context: .
+    command: celery -A celery_app.worker worker -l info
+    environment:
+      - PYTHONPATH=/usr/src/fastapi
+    volumes:
+      - ./src:/usr/src/fastapi
+      - media_volume:/usr/src/media
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    networks:
+      - theater_network
+
+  mailhog:
+    restart: always
+    build:
+      context: .
+      dockerfile: ./docker/mailhog/Dockerfile
+    container_name: mailhog_theater
+    command: ["/bin/bash", "-c", "/commands/setup_mailhog_auth.sh && /go/bin/MailHog"]
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    env_file:
+      - .env
+    environment:
+      MH_AUTH_FILE: /mailhog.auth
+    networks:
+      - theater_network
+
+  celery_beat:
+    build:
+      context: .
+    user: "0"
+    command: celery -A celery_app.worker beat -l info -s /usr/src/beat/celerybeat-schedule
+    environment:
+      - PYTHONPATH=/usr/src/fastapi
+    volumes:
+      - ./src:/usr/src/fastapi
+      - beat_schedule:/usr/src/beat
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    networks:
+      - theater_network
+
   migrator:
     build: .
     container_name: alembic_migrator_theater
@@ -55,9 +134,34 @@ services:
     networks:
       - theater_network
 
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    container_name: nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      web:
+        condition: service_started
+    env_file:
+      - ./docker/nginx/.env
+    networks:
+      - theater_network
+
 volumes:
   postgres_theater_data:
     driver: local
+  redis_data:
+    driver: local
+  media_volume:
+    driver: local
+  beat_schedule:
+    driver: local
+  
 
 networks:
   theater_network:
