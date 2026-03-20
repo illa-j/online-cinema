@@ -1,8 +1,13 @@
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer
 
 from config.settings import BaseAppSettings, Settings
+from exceptions.security import BaseSecurityError
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
+
+
+security = HTTPBearer()
 
 
 def get_settings() -> BaseAppSettings:
@@ -40,3 +45,28 @@ def get_jwt_auth_manager(settings: BaseAppSettings = Depends(get_settings)) -> J
         secret_key_refresh=settings.SECRET_KEY_REFRESH,
         algorithm=settings.JWT_SIGNING_ALGORITHM
     )
+
+
+def get_current_user(
+    credentials: str = Depends(security),
+    jwt_manager: JWTAuthManagerInterface = Depends(get_jwt_auth_manager)
+) -> int:
+    """
+    Return the authenticated user's ID from a JWT access token.
+
+    Extracts the token from the request and decodes it via the JWT manager.
+
+    Raises:
+        TokenExpiredError: If the token has expired.
+        InvalidTokenError: If the token is invalid.
+        KeyError: If `user_id` is missing.
+    """
+    token = credentials.credentials
+    try:
+        payload = jwt_manager.decode_access_token(token)
+    except BaseSecurityError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token."
+        )
+    return payload["user_id"]
