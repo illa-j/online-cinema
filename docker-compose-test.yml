@@ -1,0 +1,44 @@
+services:
+  mailhog_test:
+    restart: always
+    build:
+      context: .
+      dockerfile: ./docker/mailhog/Dockerfile
+    container_name: mailhog_theater_test
+    command: ["/bin/bash", "-c", "/commands/setup_mailhog_auth.sh && /go/bin/MailHog"]
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    networks:
+      - theater_network_test
+
+  web_test:
+    build:
+      context: .
+      dockerfile: ./docker/tests/Dockerfile
+    container_name: backend_theater_test
+    command: [ "pytest", "-c", "/usr/src/config/pytest.ini",
+               "--maxfail=5", "--disable-warnings", "-v", "--tb=short"]
+    environment:
+        - PYTHONPATH=/usr/src/fastapi
+        - ENVIRONMENT=testing
+        - MAIL_HOST=mailhog_theater_test
+        - MAIL_PORT=1025
+        - MAIL_USERNAME=testuser@mate.com
+        - MAIL_PASSWORD=test_password
+        - MAIL_FROM=noreply@test.com
+        - MAILHOG_USER=admin
+        - MAILHOG_PASSWORD=password
+        - SECRET_KEY_ACCESS=SECRET_KEY_ACCESS
+        - SECRET_KEY_REFRESH=SECRET_KEY_REFRESH
+    ports:
+      - "8000:8001"
+    depends_on:
+      mailhog_test:
+        condition: service_started
+    networks:
+      - theater_network_test
+
+networks:
+  theater_network_test:
+    driver: bridge

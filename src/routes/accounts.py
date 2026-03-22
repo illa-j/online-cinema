@@ -15,7 +15,7 @@ from database.models.accounts import (
     UserGroupEnum,
     PasswordResetTokenModel,
 )
-from database.session_postgresql import get_db
+from database import get_db
 from exceptions.security import BaseSecurityError
 from schemas import (
     UserRegistrationResponseSchema,

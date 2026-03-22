@@ -5,6 +5,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class BaseAppSettings(BaseSettings):
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
     TEMPLATE_FOLDER: Path = BASE_DIR / "notifications/templates/"
+    MAIL_HOST: str = "mailhog_theater"
+    MAIL_PORT: str = "1025"
+    MAIL_USERNAME: str = "user"
+    MAIL_PASSWORD: str = "password"
+    MAIL_FROM: str = "noreply@test.com"
+    LOGIN_TIME_DAYS: int = 7
+    MAILHOG_USER: str = "admin"
+    MAILHOG_PASSWORD: str = "password"
 
     model_config = SettingsConfigDict(env_file=BASE_DIR / ".env")
 
@@ -17,12 +25,13 @@ class Settings(BaseAppSettings):
     POSTGRES_DB: str = "test_db"
     CELERY_BROKER_URL: str = "redis://redis:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://redis:6379/1"
+
     SECRET_KEY_ACCESS: str
     SECRET_KEY_REFRESH: str
-    JWT_SIGNING_ALGORITHM: str = ("HS256",)
-    MAIL_HOST: str
-    MAIL_PORT: str
-    MAIL_USERNAME: str
-    MAIL_PASSWORD: str
-    MAIL_FROM: str
-    LOGIN_TIME_DAYS: int = 7
+    JWT_SIGNING_ALGORITHM: str = "HS256"
+
+
+class TestingSettings(BaseAppSettings):
+    SECRET_KEY_ACCESS: str
+    SECRET_KEY_REFRESH: str
+    JWT_SIGNING_ALGORITHM: str = "HS256"

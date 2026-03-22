@@ -2,7 +2,7 @@ from celery import shared_task
 from sqlalchemy import delete, func
 
 from database import ActivationTokenModel, PasswordResetTokenModel, RefreshTokenModel
-from database.session_postgresql import sync_postgresql_engine
+from database import sync_postgresql_engine
 
 MODELS = [
     ActivationTokenModel,

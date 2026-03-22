@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 
 
-from database.session_postgresql import sync_postgresql_engine
+from database import sync_postgresql_engine
 from database.models.base import Base
 
 # this is the Alembic Config object, which provides
@@ -49,7 +49,7 @@ def run_migrations_offline() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
-            compare_server_default=True
+            compare_server_default=True,
         )
 
         with context.begin_transaction():
@@ -70,7 +70,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
-            compare_server_default=True
+            compare_server_default=True,
         )
 
         with context.begin_transaction():

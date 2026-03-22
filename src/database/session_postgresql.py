@@ -3,6 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from typing import AsyncGenerator
 
+from database import Base
 from config import get_settings
 
 settings = get_settings()
@@ -27,7 +28,7 @@ sync_database_url = POSTGRESQL_DATABASE_URL.replace("postgresql+asyncpg", "postg
 sync_postgresql_engine = create_engine(sync_database_url, echo=False)
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_postgresql_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency that provides an asynchronous database session.
     The session is automatically closed after use.
