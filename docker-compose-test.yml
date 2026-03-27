@@ -24,7 +24,8 @@ services:
         - ENVIRONMENT=testing
         - MAIL_HOST=mailhog_theater_test
         - MAIL_PORT=1025
-        - MAIL_USERNAME=testuser@mate.com
+        - MAILHOG_API_PORT=8025
+        - MAIL_USERNAME=testuser@example.com
         - MAIL_PASSWORD=test_password
         - MAIL_FROM=noreply@test.com
         - MAILHOG_USER=admin
