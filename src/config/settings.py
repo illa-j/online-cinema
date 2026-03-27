@@ -11,8 +11,6 @@ class BaseAppSettings(BaseSettings):
     MAIL_PASSWORD: str = "password"
     MAIL_FROM: str = "noreply@test.com"
     LOGIN_TIME_DAYS: int = 7
-    MAILHOG_USER: str = "admin"
-    MAILHOG_PASSWORD: str = "password"
 
     model_config = SettingsConfigDict(env_file=BASE_DIR / ".env")
 
@@ -32,6 +30,9 @@ class Settings(BaseAppSettings):
 
 
 class TestingSettings(BaseAppSettings):
+    MAILHOG_API_PORT: str = "8025"
+    MAILHOG_USER: str = "admin"
+    MAILHOG_PASSWORD: str = "password"
     SECRET_KEY_ACCESS: str
     SECRET_KEY_REFRESH: str
     JWT_SIGNING_ALGORITHM: str = "HS256"
