@@ -5,14 +5,15 @@ from fastapi import HTTPException, status, BackgroundTasks
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import UserModel, ActivationTokenModel
+from database import UserModel
 from notifications import send_activation_complete_email, send_activation_email
 from schemas import (
     UserRegistrationRequestSchema,
     UserActivationRequestSchema,
     UserCreateSchema,
     UserRegistrationResponseSchema,
-    MessageResponseSchema
+    MessageResponseSchema,
+    ActivationTokenRenewalRequestSchema,
 )
 from repositories.accounts import (
     get_user_by_email,
@@ -20,7 +21,7 @@ from repositories.accounts import (
     create_user,
     create_activation_token,
     get_user_with_activation_tokens,
-    delete_activation_token_by_user_id
+    delete_activation_token_by_user_id,
 )
 from security.utils import generate_secure_token
 
@@ -83,7 +84,7 @@ async def register_user_service(
 async def activate_user_service(
     activation_data: UserActivationRequestSchema,
     background_tasks: BackgroundTasks,
-    db: AsyncSession
+    db: AsyncSession,
 ) -> MessageResponseSchema:
     user = await get_user_with_activation_tokens(db, activation_data.email)
 
@@ -135,3 +136,44 @@ async def activate_user_service(
         "http://127.0.0.1:8000/api/v1/accounts/login",
     )
     return MessageResponseSchema(message="Account activated successfully.")
+
+
+async def renew_activation_token_service(
+    data: ActivationTokenRenewalRequestSchema,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession,
+) -> MessageResponseSchema:
+    user = await get_user_by_email(db, data.email)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User with this email not found.",
+        )
+
+    if user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="User is already activated."
+        )
+    try:
+        await delete_activation_token_by_user_id(db, user.id)
+
+        activation_token = generate_secure_token()
+
+        await create_activation_token(db, user.id, activation_token)
+
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during activation token renewal.",
+        ) from e
+
+    background_tasks.add_task(
+        send_activation_email,
+        user.email,
+        activation_token,
+        f"http://127.0.0.1:8000/api/v1/accounts/activate/",
+    )
+    return MessageResponseSchema(message="New activation token has been sent.")

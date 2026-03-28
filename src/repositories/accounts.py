@@ -38,8 +38,7 @@ async def create_activation_token(
 
 
 async def get_user_with_activation_tokens(
-    db: AsyncSession,
-    email: str
+    db: AsyncSession, email: str
 ) -> UserModel | None:
     stmt = (
         select(UserModel)

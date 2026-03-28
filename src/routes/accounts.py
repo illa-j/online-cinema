@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 
 from database import (
-    ActivationTokenModel,
     RefreshTokenModel,
     UserModel,
     UserGroupModel,
@@ -34,14 +33,17 @@ from schemas import (
     UserResetPasswordRequestSchema,
 )
 from notifications import (
-    send_activation_email,
     send_password_reset_email,
     send_password_reset_complete_email,
 )
 from security.interfaces import JWTAuthManagerInterface
 from config import get_jwt_auth_manager, get_settings, get_current_user
 from security.utils import generate_secure_token
-from services.accounts import activate_user_service, register_user_service
+from services.accounts import (
+    activate_user_service,
+    register_user_service,
+    renew_activation_token_service,
+)
 
 settings = get_settings()
 router = APIRouter()
@@ -215,45 +217,9 @@ async def renew_activation_token(
     Returns:
         MessageResponseSchema: Confirmation message indicating that a new activation token was sent.
     """
-    stmt = await db.execute(select(UserModel).where(UserModel.email == data.email))
-    user = stmt.scalars().first()
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with this email not found.",
-        )
-
-    if user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="User is already activated."
-        )
-    try:
-        await db.execute(
-            delete(ActivationTokenModel).where(ActivationTokenModel.user_id == user.id)
-        )
-
-        activation_token = generate_secure_token()
-
-        new_token = ActivationTokenModel(user_id=user.id)
-        new_token.token = activation_token
-        db.add(new_token)
-
-        await db.commit()
-    except SQLAlchemyError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during activation token renewal.",
-        ) from e
-
-    background_tasks.add_task(
-        send_activation_email,
-        user.email,
-        activation_token,
-        f"http://127.0.0.1:8000/api/v1/accounts/activate/",
+    return await renew_activation_token_service(
+        data=data, background_tasks=background_tasks, db=db
     )
-    return MessageResponseSchema(message="New activation token has been sent.")
 
 
 @router.post(
