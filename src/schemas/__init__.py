@@ -14,4 +14,5 @@ from schemas.accounts import (
     ActivationTokenRenewalRequestSchema,
     UserLogoutRequestSchema,
     UserResetPasswordRequestSchema,
+    UserCreateSchema,
 )

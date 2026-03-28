@@ -42,6 +42,7 @@ from notifications import (
 from security.interfaces import JWTAuthManagerInterface
 from config import get_jwt_auth_manager, get_settings, get_current_user
 from security.utils import generate_secure_token
+from services.accounts import register_user_service
 
 settings = get_settings()
 router = APIRouter()
@@ -85,54 +86,9 @@ async def register_user(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = await db.execute(select(UserModel).where(UserModel.email == user_data.email))
-    user = stmt.scalars().first()
-    if user is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"A user with this email {user_data.email} already exists.",
-        )
-
-    stmt = await db.execute(
-        select(UserGroupModel).where(UserGroupModel.name == UserGroupEnum.USER)
+    return await register_user_service(
+        db=db, user_data=user_data, background_tasks=background_tasks
     )
-    user_group = stmt.scalars().first()
-    if user_group is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Default user group not found.",
-        )
-    try:
-        new_user = UserModel.create(
-            email=user_data.email,
-            raw_password=user_data.password,
-            group_id=user_group.id,
-        )
-        db.add(new_user)
-        await db.flush()
-
-        activation_token = generate_secure_token()
-
-        token = ActivationTokenModel(user_id=new_user.id)
-        token.token = activation_token
-        db.add(token)
-
-        await db.commit()
-        await db.refresh(new_user)
-    except SQLAlchemyError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during user creation.",
-        ) from e
-
-    background_tasks.add_task(
-        send_activation_email,
-        new_user.email,
-        activation_token,
-        f"http://127.0.0.1:8000/api/v1/accounts/activate/",
-    )
-    return UserRegistrationResponseSchema(id=new_user.id, email=new_user.email)
 
 
 @router.post(

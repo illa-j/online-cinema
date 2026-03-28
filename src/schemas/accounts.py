@@ -25,6 +25,10 @@ class UserRegistrationRequestSchema(BaseEmailPasswordSchema):
     pass
 
 
+class UserCreateSchema(BaseEmailPasswordSchema):
+    group_id: int
+
+
 class PasswordResetRequestSchema(BaseModel):
     email: EmailStr
 
