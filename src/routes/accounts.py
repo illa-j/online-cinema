@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 
-from database.models.accounts import (
+from database import (
     ActivationTokenModel,
     RefreshTokenModel,
     UserModel,
@@ -35,14 +35,13 @@ from schemas import (
 )
 from notifications import (
     send_activation_email,
-    send_activation_complete_email,
     send_password_reset_email,
     send_password_reset_complete_email,
 )
 from security.interfaces import JWTAuthManagerInterface
 from config import get_jwt_auth_manager, get_settings, get_current_user
 from security.utils import generate_secure_token
-from services.accounts import register_user_service
+from services.accounts import activate_user_service, register_user_service
 
 settings = get_settings()
 router = APIRouter()
@@ -151,66 +150,9 @@ async def activate_user(
     Returns:
         MessageResponseSchema: Confirmation message indicating successful activation.
     """
-    stmt = await db.execute(
-        select(UserModel)
-        .options(joinedload(UserModel.activation_tokens))
-        .join(ActivationTokenModel)
-        .where(UserModel.email == activation_data.email)
+    return await activate_user_service(
+        activation_data=activation_data, background_tasks=background_tasks, db=db
     )
-    user = stmt.scalars().first()
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid email or activation token.",
-        )
-
-    if user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="User is already activated."
-        )
-    user_activation_token = (
-        user.activation_tokens[0] if user.activation_tokens else None
-    )
-
-    if not user_activation_token or not user_activation_token.verify_token(
-        activation_data.token
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid email or activation token.",
-        )
-
-    if _as_utc(user_activation_token.expires_at) < datetime.now(timezone.utc):
-        await db.execute(
-            delete(ActivationTokenModel).where(ActivationTokenModel.user_id == user.id)
-        )
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token has been expired. Try to renew token.",
-        )
-
-    try:
-        await db.execute(
-            delete(ActivationTokenModel).where(ActivationTokenModel.user_id == user.id)
-        )
-
-        user.is_active = True
-        await db.commit()
-    except SQLAlchemyError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during account activation.",
-        ) from e
-
-    background_tasks.add_task(
-        send_activation_complete_email,
-        user.email,
-        "http://127.0.0.1:8000/api/v1/accounts/login",
-    )
-    return MessageResponseSchema(message="Account activated successfully.")
 
 
 @router.post(
