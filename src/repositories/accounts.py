@@ -9,6 +9,7 @@ from database import (
     ActivationTokenModel,
     RefreshTokenModel,
 )
+from database.models.accounts import PasswordResetTokenModel
 from schemas import UserCreateSchema
 from config import get_settings
 
@@ -63,6 +64,18 @@ async def create_refresh_token(
     return refresh_token
 
 
+async def create_password_reset_token(
+    db: AsyncSession, user_id: int, token: str
+) -> PasswordResetTokenModel:
+    reset_token = PasswordResetTokenModel(
+        user_id=user_id
+    )
+    reset_token.token = token
+    db.add(reset_token)
+    await db.flush()
+    return reset_token
+
+
 async def get_user_with_activation_tokens_by_email(
     db: AsyncSession, email: str
 ) -> UserModel | None:
@@ -93,6 +106,15 @@ async def delete_activation_token_by_user_id(db: AsyncSession, user_id: int) -> 
 
 async def delete_refresh_tokens_by_user_id(db: AsyncSession, user_id: int) -> None:
     stmt = select(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id)
+    result = await db.execute(stmt)
+    token = result.scalars().first()
+    if token:
+        await db.delete(token)
+        await db.flush()
+
+
+async def delete_password_reset_tokens_by_user_id(db: AsyncSession, user_id: int) -> None:
+    stmt = select(PasswordResetTokenModel).where(PasswordResetTokenModel.user_id == user_id)
     result = await db.execute(stmt)
     token = result.scalars().first()
     if token:

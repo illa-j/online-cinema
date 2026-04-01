@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import UserModel
 from exceptions.security import BaseSecurityError
 from notifications import send_activation_complete_email, send_activation_email
+from notifications.emails import send_password_reset_email
 from schemas import (
     UserRegistrationRequestSchema,
     UserActivationRequestSchema,
@@ -21,7 +22,9 @@ from schemas import (
     TokenRefreshResponseSchema
 )
 from repositories.accounts import (
+    create_password_reset_token,
     create_refresh_token,
+    delete_password_reset_tokens_by_user_id,
     get_refresh_token_by_user_id,
     get_user_by_email,
     get_default_user_group,
@@ -344,3 +347,39 @@ async def reset_user_password_service(
         ) from e
 
     return MessageResponseSchema(message="User password was updated successfully.")
+
+
+async def password_reset_request_service(
+    email: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession
+) -> MessageResponseSchema:
+    GENERIC_RESPONSE = MessageResponseSchema(
+        message="If an account with this email exists, password reset instructions have been sent."
+    )
+
+    user = await get_user_by_email(db, email)
+
+    if user is None or not user.is_active:
+        return GENERIC_RESPONSE
+
+    try:
+        await delete_password_reset_tokens_by_user_id(db, user.id)
+        reset_token = generate_secure_token()
+        await create_password_reset_token(db, user.id, reset_token)
+
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during password reset token generation.",
+        ) from e
+
+    background_tasks.add_task(
+        send_password_reset_email,
+        user.email,
+        reset_token,
+        "http://127.0.0.1:8000/reset-password/",
+    )
+    return GENERIC_RESPONSE

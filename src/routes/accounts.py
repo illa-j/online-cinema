@@ -30,16 +30,15 @@ from schemas import (
     UserResetPasswordRequestSchema,
 )
 from notifications import (
-    send_password_reset_email,
     send_password_reset_complete_email,
 )
 from security.interfaces import JWTAuthManagerInterface
 from config import get_jwt_auth_manager, get_settings, get_current_user
-from security.utils import generate_secure_token
 from services.accounts import (
     activate_user_service,
     login_user_service,
     logout_user_service,
+    password_reset_request_service,
     register_user_service,
     renew_access_token_service,
     renew_activation_token_service,
@@ -508,44 +507,9 @@ async def password_reset_request(
         MessageResponseSchema: Generic response indicating that reset instructions
         may have been sent if the account exists.
     """
-    GENERIC_RESPONSE = MessageResponseSchema(
-        message="If an account with this email exists, password reset instructions have been sent."
+    return await password_reset_request_service(
+        email=data.email, background_tasks=background_tasks, db=db
     )
-
-    stmt = await db.execute(select(UserModel).where(UserModel.email == data.email))
-    user = stmt.scalars().first()
-
-    if user is None or not user.is_active:
-        return GENERIC_RESPONSE
-
-    try:
-        await db.execute(
-            delete(PasswordResetTokenModel).where(
-                PasswordResetTokenModel.user_id == user.id
-            )
-        )
-
-        reset_token = generate_secure_token()
-
-        new_token = PasswordResetTokenModel(user_id=user.id)
-        new_token.token = reset_token
-        db.add(new_token)
-
-        await db.commit()
-    except SQLAlchemyError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during password reset token generation.",
-        ) from e
-
-    background_tasks.add_task(
-        send_password_reset_email,
-        user.email,
-        reset_token,
-        f"http://127.0.0.1:8000/reset-password/",
-    )
-    return GENERIC_RESPONSE
 
 
 @router.post(
