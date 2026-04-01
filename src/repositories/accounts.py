@@ -21,6 +21,12 @@ async def get_user_by_email(db: AsyncSession, email: str) -> UserModel | None:
     return result.scalars().first()
 
 
+async def get_user_by_id(db: AsyncSession, user_id: int) -> UserModel | None:
+    stmt = select(UserModel).where(UserModel.id == user_id)
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
 async def get_default_user_group(db: AsyncSession) -> UserGroupModel | None:
     stmt = select(UserGroupModel).where(UserGroupModel.name == UserGroupEnum.USER)
     result = await db.execute(stmt)

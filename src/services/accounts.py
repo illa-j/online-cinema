@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status, BackgroundTasks
-
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +16,9 @@ from schemas import (
     ActivationTokenRenewalRequestSchema,
     UserLoginRequestSchema,
     UserLoginResponseSchema,
-    UserLogoutRequestSchema
+    UserLogoutRequestSchema,
+    AccessTokenRenewalRequestSchema,
+    TokenRefreshResponseSchema
 )
 from repositories.accounts import (
     create_refresh_token,
@@ -26,7 +27,8 @@ from repositories.accounts import (
     get_default_user_group,
     create_user,
     create_activation_token,
-    get_user_with_activation_tokens,
+    get_user_by_id,
+    get_user_with_activation_tokens_by_email,
     delete_activation_token_by_user_id,
     delete_refresh_tokens_by_user_id,
 )
@@ -94,7 +96,7 @@ async def activate_user_service(
     background_tasks: BackgroundTasks,
     db: AsyncSession,
 ) -> MessageResponseSchema:
-    user = await get_user_with_activation_tokens(db, activation_data.email)
+    user = await get_user_with_activation_tokens_by_email(db, activation_data.email)
 
     if user is None:
         raise HTTPException(
@@ -215,7 +217,7 @@ async def login_user_service(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while processing the request: {e}",
+            detail="An error occurred while processing the request.",
         ) from e
 
     jwt_access_token = jwt_manager.create_access_token({"user_id": user.id})
@@ -273,3 +275,47 @@ async def logout_user_service(
         ) from e
 
     return MessageResponseSchema(message="Successfully logged out.")
+
+
+async def renew_access_token_service(
+    data: AccessTokenRenewalRequestSchema,
+    jwt_manager: JWTAuthManagerInterface,
+    db: AsyncSession
+) -> TokenRefreshResponseSchema:
+    try:
+        payload = jwt_manager.decode_refresh_token(data.refresh_token)
+        user_id = payload.get("user_id")
+    except BaseSecurityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token or expired."
+        ) from e
+
+    user_refresh_token = await get_refresh_token_by_user_id(db, user_id)
+    if user_refresh_token is None or not user_refresh_token.verify_token(
+        data.refresh_token
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token or expired.",
+        )
+
+    user = await get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    if _as_utc(user_refresh_token.expires_at) < datetime.now(timezone.utc):
+        await delete_refresh_tokens_by_user_id(db, user_id)
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token or expired.",
+        )
+
+    await delete_refresh_tokens_by_user_id(db, user_id)
+    await db.commit()
+
+    jwt_access_token = jwt_manager.create_access_token({"user_id": user_id})
+    return TokenRefreshResponseSchema(access_token=jwt_access_token)

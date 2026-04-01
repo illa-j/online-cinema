@@ -4,18 +4,15 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 
 from database import (
-    RefreshTokenModel,
     UserModel,
     UserGroupModel,
     UserGroupEnum,
     PasswordResetTokenModel,
 )
 from database import get_db
-from exceptions.security import BaseSecurityError, TokenExpiredError
 from schemas import (
     UserRegistrationResponseSchema,
     UserRegistrationRequestSchema,
@@ -44,6 +41,7 @@ from services.accounts import (
     login_user_service,
     logout_user_service,
     register_user_service,
+    renew_access_token_service,
     renew_activation_token_service,
 )
 
@@ -347,7 +345,7 @@ async def logout_user(
         "Generate a new access token using a valid refresh token. "
         "The refresh token must be valid, exist in the database, and not be expired."
     ),
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_200_OK,
     responses={
         400: {
             "description": "Bad Request — The refresh token is invalid or expired.",
@@ -410,55 +408,7 @@ async def renew_access_token(
     Returns:
         TokenRefreshResponseSchema: A new access token.
     """
-    try:
-        payload = jwt_manager.decode_refresh_token(data.refresh_token)
-        user_id = payload.get("user_id")
-    except TokenExpiredError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token or expired."
-        ) from e
-    except BaseSecurityError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token or expired."
-        ) from e
-
-    stmt = await db.execute(
-        select(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id)
-    )
-    user_refresh_token = stmt.scalars().first()
-    if user_refresh_token is None or not user_refresh_token.verify_token(
-        data.refresh_token
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token or expired.",
-        )
-
-    stmt = await db.execute(select(UserModel).where(UserModel.id == user_id))
-    user = stmt.scalars().first()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
-        )
-
-    if _as_utc(user_refresh_token.expires_at) < datetime.now(timezone.utc):
-        await db.execute(
-            delete(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id)
-        )
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token or expired.",
-        )
-
-    await db.execute(
-        delete(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id)
-    )
-    await db.commit()
-
-    jwt_access_token = jwt_manager.create_access_token({"user_id": user_id})
-    return TokenRefreshResponseSchema(access_token=jwt_access_token)
+    return await renew_access_token_service(data=data, jwt_manager=jwt_manager, db=db)
 
 
 @router.post(

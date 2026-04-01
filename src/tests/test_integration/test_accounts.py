@@ -788,8 +788,8 @@ async def test_refresh_access_token_success(
         "/api/v1/accounts/refresh/", json=refresh_payload
     )
     assert (
-        refresh_response.status_code == 201
-    ), "Expected status code 201 for successful token refresh."
+        refresh_response.status_code == 200
+    ), "Expected status code 200 for successful token refresh."
     refresh_data = refresh_response.json()
     assert "access_token" in refresh_data, "Access token is missing in the response."
     assert refresh_data["access_token"], "Access token is empty."
