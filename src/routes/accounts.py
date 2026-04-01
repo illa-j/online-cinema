@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select, delete
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
@@ -9,8 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from database import (
     UserModel,
     UserGroupModel,
-    UserGroupEnum,
-    PasswordResetTokenModel,
+    UserGroupEnum
 )
 from database import get_db
 from schemas import (
@@ -29,15 +28,13 @@ from schemas import (
     ChangeUserGroupRequestSchema,
     UserResetPasswordRequestSchema,
 )
-from notifications import (
-    send_password_reset_complete_email,
-)
 from security.interfaces import JWTAuthManagerInterface
 from config import get_jwt_auth_manager, get_settings, get_current_user
 from services.accounts import (
     activate_user_service,
     login_user_service,
     logout_user_service,
+    password_reset_complete_service,
     password_reset_request_service,
     register_user_service,
     renew_access_token_service,
@@ -586,71 +583,9 @@ async def password_reset_complete(
     Returns:
         MessageResponseSchema: Confirmation message indicating successful password reset.
     """
-    stmt = await db.execute(
-        select(UserModel)
-        .options(joinedload(UserModel.password_reset_tokens))
-        .join(PasswordResetTokenModel)
-        .where(
-            UserModel.email == data.email,
-        )
+    return await password_reset_complete_service(
+        data=data, background_tasks=background_tasks, db=db
     )
-    user = stmt.scalars().first()
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid email or password reset token.",
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is not activated.",
-        )
-
-    password_reset_token = (
-        user.password_reset_tokens[0] if user.password_reset_tokens else None
-    )
-
-    if not password_reset_token or not password_reset_token.verify_token(data.token):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid email or password reset token.",
-        )
-
-    if _as_utc(password_reset_token.expires_at) < datetime.now(timezone.utc):
-        await db.execute(
-            delete(PasswordResetTokenModel).where(
-                PasswordResetTokenModel.user_id == user.id
-            )
-        )
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid email or password reset token.",
-        )
-    try:
-        await db.execute(
-            delete(PasswordResetTokenModel).where(
-                PasswordResetTokenModel.user_id == user.id
-            )
-        )
-        user.password = data.password
-
-        await db.commit()
-    except SQLAlchemyError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during password reset.",
-        ) from e
-
-    background_tasks.add_task(
-        send_password_reset_complete_email,
-        user.email,
-        "http://127.0.0.1:8000/api/v1/accounts/login",
-    )
-    return MessageResponseSchema(message="Password reset successfully.")
 
 
 @router.patch(

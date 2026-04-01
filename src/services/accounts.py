@@ -6,8 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import UserModel
 from exceptions.security import BaseSecurityError
-from notifications import send_activation_complete_email, send_activation_email
-from notifications.emails import send_password_reset_email
+from notifications import (
+    send_activation_complete_email,
+    send_activation_email,
+    send_password_reset_complete_email,
+    send_password_reset_email
+)
 from schemas import (
     UserRegistrationRequestSchema,
     UserActivationRequestSchema,
@@ -19,7 +23,8 @@ from schemas import (
     UserLoginResponseSchema,
     UserLogoutRequestSchema,
     AccessTokenRenewalRequestSchema,
-    TokenRefreshResponseSchema
+    TokenRefreshResponseSchema,
+    PasswordResetCompleteRequestSchema
 )
 from repositories.accounts import (
     create_password_reset_token,
@@ -34,6 +39,7 @@ from repositories.accounts import (
     get_user_with_activation_tokens_by_email,
     delete_activation_token_by_user_id,
     delete_refresh_tokens_by_user_id,
+    get_user_with_password_reset_tokens_by_email,
 )
 from security.interfaces import JWTAuthManagerInterface
 from security.utils import generate_secure_token
@@ -383,3 +389,59 @@ async def password_reset_request_service(
         "http://127.0.0.1:8000/reset-password/",
     )
     return GENERIC_RESPONSE
+
+
+async def password_reset_complete_service(
+    data: PasswordResetCompleteRequestSchema,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession,
+) -> MessageResponseSchema:
+    user = await get_user_with_password_reset_tokens_by_email(db, data.email)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email or password reset token.",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is not activated.",
+        )
+
+    password_reset_token = (
+        user.password_reset_tokens[0] if user.password_reset_tokens else None
+    )
+
+    if not password_reset_token or not password_reset_token.verify_token(data.token):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email or password reset token.",
+        )
+
+    if _as_utc(password_reset_token.expires_at) < datetime.now(timezone.utc):
+        await delete_password_reset_tokens_by_user_id(db, user.id)
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email or password reset token.",
+        )
+    try:
+        await delete_password_reset_tokens_by_user_id(db, user.id)
+        user.password = data.password
+
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during password reset.",
+        ) from e
+
+    background_tasks.add_task(
+        send_password_reset_complete_email,
+        user.email,
+        "http://127.0.0.1:8000/api/v1/accounts/login",
+    )
+    return MessageResponseSchema(message="Password reset successfully.")
