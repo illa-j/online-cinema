@@ -42,6 +42,7 @@ from security.utils import generate_secure_token
 from services.accounts import (
     activate_user_service,
     login_user_service,
+    logout_user_service,
     register_user_service,
     renew_activation_token_service,
 )
@@ -335,57 +336,7 @@ async def logout_user(
     Returns:
         MessageResponseSchema: Confirmation message indicating successful logout.
     """
-    try:
-        payload = jwt_manager.decode_refresh_token(data.refresh_token)
-        user_id = payload.get("user_id")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token or expired.",
-            )
-    except BaseSecurityError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token or expired."
-        ) from e
-
-    stmt = await db.execute(
-        select(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id)
-    )
-    user_refresh_token = stmt.scalars().first()
-    if user_refresh_token is None or not user_refresh_token.verify_token(
-        data.refresh_token
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid token or expired.",
-        )
-
-    if _as_utc(user_refresh_token.expires_at) < datetime.now(timezone.utc):
-        await db.execute(
-            delete(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id)
-        )
-
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid token or expired.",
-        )
-
-    try:
-        await db.execute(
-            delete(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id)
-        )
-
-        await db.commit()
-    except SQLAlchemyError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while processing the request.",
-        ) from e
-
-    return MessageResponseSchema(message="Successfully logged out.")
+    return await logout_user_service(data=data, jwt_manager=jwt_manager, db=db)
 
 
 @router.post(

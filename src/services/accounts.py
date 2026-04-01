@@ -6,6 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import UserModel
+from exceptions.security import BaseSecurityError
 from notifications import send_activation_complete_email, send_activation_email
 from schemas import (
     UserRegistrationRequestSchema,
@@ -16,9 +17,11 @@ from schemas import (
     ActivationTokenRenewalRequestSchema,
     UserLoginRequestSchema,
     UserLoginResponseSchema,
+    UserLogoutRequestSchema
 )
 from repositories.accounts import (
     create_refresh_token,
+    get_refresh_token_by_user_id,
     get_user_by_email,
     get_default_user_group,
     create_user,
@@ -220,3 +223,53 @@ async def login_user_service(
         access_token=jwt_access_token,
         refresh_token=jwt_refresh_token,
     )
+
+
+async def logout_user_service(
+    data: UserLogoutRequestSchema,
+    jwt_manager: JWTAuthManagerInterface,
+    db: AsyncSession
+) -> MessageResponseSchema:
+    try:
+        payload = jwt_manager.decode_refresh_token(data.refresh_token)
+        user_id = payload.get("user_id")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token or expired.",
+            )
+    except BaseSecurityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token or expired."
+        ) from e
+
+    user_refresh_token = await get_refresh_token_by_user_id(db, user_id)
+    if user_refresh_token is None or not user_refresh_token.verify_token(
+        data.refresh_token
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token or expired.",
+        )
+
+    if _as_utc(user_refresh_token.expires_at) < datetime.now(timezone.utc):
+        await delete_refresh_tokens_by_user_id(db, user_id)
+
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token or expired.",
+        )
+
+    try:
+        await delete_refresh_tokens_by_user_id(db, user_id)
+
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while processing the request.",
+        ) from e
+
+    return MessageResponseSchema(message="Successfully logged out.")
