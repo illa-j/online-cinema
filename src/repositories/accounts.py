@@ -34,6 +34,22 @@ async def get_default_user_group(db: AsyncSession) -> UserGroupModel | None:
     return result.scalars().first()
 
 
+async def get_user_with_group_by_id(db: AsyncSession, user_id: int) -> UserModel | None:
+    stmt = (
+        select(UserModel)
+        .options(joinedload(UserModel.group))
+        .where(UserModel.id == user_id)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
+async def get_user_group_by_name(db: AsyncSession, group_name: UserGroupEnum) -> UserGroupModel | None:
+    stmt = select(UserGroupModel).where(UserGroupModel.name == group_name)
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
 async def get_user_with_activation_tokens_by_email(
     db: AsyncSession, email: str
 ) -> UserModel | None:

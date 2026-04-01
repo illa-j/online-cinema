@@ -4,7 +4,7 @@ from fastapi import HTTPException, status, BackgroundTasks
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import UserModel
+from database import UserModel, UserGroupEnum
 from exceptions.security import BaseSecurityError
 from notifications import (
     send_activation_complete_email,
@@ -24,7 +24,8 @@ from schemas import (
     UserLogoutRequestSchema,
     AccessTokenRenewalRequestSchema,
     TokenRefreshResponseSchema,
-    PasswordResetCompleteRequestSchema
+    PasswordResetCompleteRequestSchema,
+    ChangeUserGroupRequestSchema
 )
 from repositories.accounts import (
     create_password_reset_token,
@@ -36,9 +37,11 @@ from repositories.accounts import (
     create_user,
     create_activation_token,
     get_user_by_id,
+    get_user_group_by_name,
     get_user_with_activation_tokens_by_email,
     delete_activation_token_by_user_id,
     delete_refresh_tokens_by_user_id,
+    get_user_with_group_by_id,
     get_user_with_password_reset_tokens_by_email,
 )
 from security.interfaces import JWTAuthManagerInterface
@@ -445,3 +448,52 @@ async def password_reset_complete_service(
         "http://127.0.0.1:8000/api/v1/accounts/login",
     )
     return MessageResponseSchema(message="Password reset successfully.")
+
+
+async def change_user_group_service(
+    data: ChangeUserGroupRequestSchema,
+    current_user_id: int,
+    db: AsyncSession,
+) -> MessageResponseSchema:
+    current_user = await get_user_with_group_by_id(db, current_user_id)
+
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User was not found."
+        )
+
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive."
+        )
+
+    if current_user.group.name != UserGroupEnum.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions."
+        )
+
+    user = await get_user_by_email(db, data.email)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
+        )
+
+    user_group = await get_user_group_by_name(db, data.group)
+    if user_group is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User group not found.",
+        )
+
+    try:
+        user.group = user_group
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during user group update.",
+        ) from e
+
+    return MessageResponseSchema(message="User group updated successfully.")

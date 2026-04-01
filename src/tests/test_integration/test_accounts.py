@@ -1042,7 +1042,7 @@ async def test_change_user_group_success(client, db_session, seed_user_groups):
     assert user is not None, "User should exist in the database."
 
     response = await client.patch(
-        f"/api/v1/accounts/{user.id}/change-group/", json={"group": "admin"}
+        f"/api/v1/accounts/change-user-group/", json={"email": user.email, "group": "admin"}
     )
     assert (
         response.status_code == 200
@@ -1086,7 +1086,8 @@ async def test_change_user_group_invalid_group(client, db_session, seed_user_gro
     assert user is not None, "User should exist in the database."
 
     response = await client.patch(
-        f"/api/v1/accounts/{user.id}/change-group/", json={"group": "nonexistent"}
+        f"/api/v1/accounts/change-user-group/",
+        json={"email": user.email, "group": "nonexistent"}
     )
     assert response.status_code == 422, "Expected status code 422 for invalid group."
     await db_session.refresh(user)
@@ -1123,7 +1124,7 @@ async def test_change_user_group_nonexistent_user(client, db_session, seed_user_
     assert user_group is not None, "Default user group should exist."
 
     response = await client.patch(
-        f"/api/v1/accounts/9999/change-group/", json={"group": "admin"}
+        f"/api/v1/accounts/change-user-group/", json={"email": "nonexistent@gmail.com", "group": "admin"}
     )
     assert (
         response.status_code == 404
@@ -1140,7 +1141,7 @@ async def test_change_user_group_unauthorized(client, db_session, seed_user_grou
     Ensures the endpoint rejects unauthenticated requests.
     """
     response = await client.patch(
-        f"/api/v1/accounts/1/change-group/", json={"group": "admin"}
+        f"/api/v1/accounts/change-user-group/", json={"email": "user@gmail.com", "group": "admin"}
     )
     assert (
         response.status_code == 401
@@ -1172,7 +1173,7 @@ async def test_change_user_group_forbidden(client, db_session, seed_user_groups)
         {"Authorization": f"Bearer {login_response.json()["access_token"]}"}
     )
     response = await client.patch(
-        f"/api/v1/accounts/{user.id}/change-group/", json={"group": "admin"}
+        f"/api/v1/accounts/change-user-group/", json={"email": user.email, "group": "admin"}
     )
     assert response.status_code == 403, "Expected status code 403 for forbidden access."
     assert (

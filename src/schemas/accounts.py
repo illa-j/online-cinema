@@ -94,4 +94,5 @@ class TokenRefreshResponseSchema(BaseModel):
 
 
 class ChangeUserGroupRequestSchema(BaseModel):
+    email: EmailStr
     group: UserGroupEnum
