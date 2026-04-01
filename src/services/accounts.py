@@ -319,3 +319,28 @@ async def renew_access_token_service(
 
     jwt_access_token = jwt_manager.create_access_token({"user_id": user_id})
     return TokenRefreshResponseSchema(access_token=jwt_access_token)
+
+
+async def reset_user_password_service(
+    data: UserLoginRequestSchema,
+    db: AsyncSession
+) -> MessageResponseSchema:
+    user = await get_user_by_email(db, data.email)
+
+    if user is None or not user.verify_password(data.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect password or email.",
+        )
+
+    try:
+        user.password = data.new_password
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while processing the request.",
+        ) from e
+
+    return MessageResponseSchema(message="User password was updated successfully.")

@@ -43,6 +43,7 @@ from services.accounts import (
     register_user_service,
     renew_access_token_service,
     renew_activation_token_service,
+    reset_user_password_service,
 )
 
 settings = get_settings()
@@ -455,32 +456,7 @@ async def reset_user_password(
     Returns:
         MessageResponseSchema: Confirmation message indicating successful password update.
     """
-    stmt = await db.execute(select(UserModel).where(UserModel.email == data.email))
-    user = stmt.scalar_one_or_none()
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect password or email.",
-        )
-
-    if not user.verify_password(data.password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect password or email.",
-        )
-
-    try:
-        user.password = data.new_password
-        await db.commit()
-    except SQLAlchemyError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while processing the request.",
-        ) from e
-
-    return MessageResponseSchema(message="User password was updated successfully.")
+    return await reset_user_password_service(data=data, db=db)
 
 
 @router.post(
