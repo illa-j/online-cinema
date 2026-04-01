@@ -15,4 +15,5 @@ from schemas.accounts import (
     UserLogoutRequestSchema,
     UserResetPasswordRequestSchema,
     UserCreateSchema,
+    ActivateUserManuallyRequestSchema
 )

@@ -25,7 +25,8 @@ from schemas import (
     AccessTokenRenewalRequestSchema,
     TokenRefreshResponseSchema,
     PasswordResetCompleteRequestSchema,
-    ChangeUserGroupRequestSchema
+    ChangeUserGroupRequestSchema,
+    ActivateUserManuallyRequestSchema
 )
 from repositories.accounts import (
     create_password_reset_token,
@@ -497,3 +498,48 @@ async def change_user_group_service(
         ) from e
 
     return MessageResponseSchema(message="User group updated successfully.")
+
+
+async def activate_user_manually_service(
+    data: ActivateUserManuallyRequestSchema,
+    current_user_id: int,
+    db: AsyncSession,
+) -> MessageResponseSchema:
+    current_user = await get_user_with_group_by_id(db, current_user_id)
+
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User was not found."
+        )
+
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive."
+        )
+
+    if current_user.group.name != UserGroupEnum.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions."
+        )
+
+    user = await get_user_by_email(db, data.email)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
+        )
+
+    if user.is_active:
+        return MessageResponseSchema(message="User is already active.")
+
+    try:
+        user.is_active = True
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during activation.",
+        ) from e
+
+    return MessageResponseSchema(message="User was activated successfully.")

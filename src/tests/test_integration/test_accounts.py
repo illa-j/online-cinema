@@ -1042,7 +1042,8 @@ async def test_change_user_group_success(client, db_session, seed_user_groups):
     assert user is not None, "User should exist in the database."
 
     response = await client.patch(
-        f"/api/v1/accounts/change-user-group/", json={"email": user.email, "group": "admin"}
+        f"/api/v1/accounts/change-user-group/",
+        json={"email": user.email, "group": "admin"},
     )
     assert (
         response.status_code == 200
@@ -1087,7 +1088,7 @@ async def test_change_user_group_invalid_group(client, db_session, seed_user_gro
 
     response = await client.patch(
         f"/api/v1/accounts/change-user-group/",
-        json={"email": user.email, "group": "nonexistent"}
+        json={"email": user.email, "group": "nonexistent"},
     )
     assert response.status_code == 422, "Expected status code 422 for invalid group."
     await db_session.refresh(user)
@@ -1124,7 +1125,8 @@ async def test_change_user_group_nonexistent_user(client, db_session, seed_user_
     assert user_group is not None, "Default user group should exist."
 
     response = await client.patch(
-        f"/api/v1/accounts/change-user-group/", json={"email": "nonexistent@gmail.com", "group": "admin"}
+        f"/api/v1/accounts/change-user-group/",
+        json={"email": "nonexistent@gmail.com", "group": "admin"},
     )
     assert (
         response.status_code == 404
@@ -1141,7 +1143,8 @@ async def test_change_user_group_unauthorized(client, db_session, seed_user_grou
     Ensures the endpoint rejects unauthenticated requests.
     """
     response = await client.patch(
-        f"/api/v1/accounts/change-user-group/", json={"email": "user@gmail.com", "group": "admin"}
+        f"/api/v1/accounts/change-user-group/",
+        json={"email": "user@gmail.com", "group": "admin"},
     )
     assert (
         response.status_code == 401
@@ -1173,7 +1176,8 @@ async def test_change_user_group_forbidden(client, db_session, seed_user_groups)
         {"Authorization": f"Bearer {login_response.json()["access_token"]}"}
     )
     response = await client.patch(
-        f"/api/v1/accounts/change-user-group/", json={"email": user.email, "group": "admin"}
+        f"/api/v1/accounts/change-user-group/",
+        json={"email": user.email, "group": "admin"},
     )
     assert response.status_code == 403, "Expected status code 403 for forbidden access."
     assert (
@@ -1223,7 +1227,9 @@ async def test_activate_user_manually_successfully(
     client.headers.update(
         {"Authorization": f"Bearer {login_response.json()['access_token']}"}
     )
-    activation_response = await client.patch(f"/api/v1/accounts/{user.id}/activate/")
+    activation_response = await client.patch(
+        f"/api/v1/accounts/activate-user/", json={"email": user.email}
+    )
     assert (
         activation_response.status_code == 200
     ), "Expected status code 200 for successful activation."
@@ -1257,7 +1263,9 @@ async def test_activate_user_manually_nonexistent_user(
     client.headers.update(
         {"Authorization": f"Bearer {login_response.json()['access_token']}"}
     )
-    activation_response = await client.patch(f"/api/v1/accounts/9999/activate/")
+    activation_response = await client.patch(
+        f"/api/v1/accounts/activate-user/", json={"email": "nonexistent@gmail.com"}
+    )
     assert (
         activation_response.status_code == 404
     ), "Expected status code 404 for non-existent user."
@@ -1274,7 +1282,9 @@ async def test_activate_user_manually_unauthorized(
 
     Ensures unauthenticated requests are rejected.
     """
-    activation_response = await client.patch(f"/api/v1/accounts/1/activate/")
+    activation_response = await client.patch(
+        f"/api/v1/accounts/activate-user/", json={"email": "nonexistent@gmail.com"}
+    )
     assert (
         activation_response.status_code == 401
     ), "Expected status code 401 for unauthorized access."
@@ -1304,7 +1314,9 @@ async def test_activate_user_manually_forbidden(client, db_session, seed_user_gr
     client.headers.update(
         {"Authorization": f"Bearer {login_response.json()['access_token']}"}
     )
-    activation_response = await client.patch(f"/api/v1/accounts/{user.id}/activate/")
+    activation_response = await client.patch(
+        f"/api/v1/accounts/activate-user/", json={"email": payload["email"]}
+    )
     assert (
         activation_response.status_code == 403
     ), "Expected status code 403 for forbidden access."
@@ -1336,7 +1348,9 @@ async def test_activate_user_manually_already_active(
     client.headers.update(
         {"Authorization": f"Bearer {login_response.json()['access_token']}"}
     )
-    activation_response = await client.patch(f"/api/v1/accounts/{user.id}/activate/")
+    activation_response = await client.patch(
+        f"/api/v1/accounts/activate-user/", json={"email": payload["email"]}
+    )
     assert (
         activation_response.status_code == 200
     ), "Expected status code 200 for already active user."

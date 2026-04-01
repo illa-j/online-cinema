@@ -26,10 +26,12 @@ from schemas import (
     AccessTokenRenewalRequestSchema,
     ChangeUserGroupRequestSchema,
     UserResetPasswordRequestSchema,
+    ActivateUserManuallyRequestSchema
 )
 from security.interfaces import JWTAuthManagerInterface
 from config import get_jwt_auth_manager, get_settings, get_current_user
 from services.accounts import (
+    activate_user_manually_service,
     activate_user_service,
     change_user_group_service,
     login_user_service,
@@ -677,7 +679,7 @@ async def change_user_group(
 
 
 @router.patch(
-    "/{user_id}/activate/",
+    "/activate-user/",
     response_model=MessageResponseSchema,
     summary="Manually Activate User",
     description=(
@@ -733,7 +735,7 @@ async def change_user_group(
     },
 )
 async def activate_user_manually(
-    user_id: int,
+    data: ActivateUserManuallyRequestSchema,
     current_user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -757,47 +759,6 @@ async def activate_user_manually(
         MessageResponseSchema: Confirmation message indicating whether the user
         was already active or successfully activated.
     """
-    stmt = await db.execute(
-        select(UserModel)
-        .options(selectinload(UserModel.group))
-        .where(UserModel.id == current_user_id)
+    return await activate_user_manually_service(
+        data=data, current_user_id=current_user_id, db=db
     )
-    current_user = stmt.scalar_one_or_none()
-
-    if current_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User was not found."
-        )
-
-    if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive."
-        )
-
-    if current_user.group.name != UserGroupEnum.ADMIN.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions."
-        )
-
-    stmt = await db.execute(select(UserModel).where(UserModel.id == user_id))
-    user = stmt.scalar_one_or_none()
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
-        )
-
-    if user.is_active:
-        return MessageResponseSchema(message="User is already active.")
-
-    try:
-        user.is_active = True
-        await db.commit()
-    except SQLAlchemyError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during activation.",
-        ) from e
-
-    return MessageResponseSchema(message="User was activated successfully.")
