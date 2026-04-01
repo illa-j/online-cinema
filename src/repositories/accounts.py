@@ -2,8 +2,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from database import UserModel, UserGroupModel, UserGroupEnum, ActivationTokenModel
+from database import (
+    UserModel,
+    UserGroupModel,
+    UserGroupEnum,
+    ActivationTokenModel,
+    RefreshTokenModel,
+)
 from schemas import UserCreateSchema
+from config import get_settings
+
+settings = get_settings()
 
 
 async def get_user_by_email(db: AsyncSession, email: str) -> UserModel | None:
@@ -37,6 +46,17 @@ async def create_activation_token(
     return activation_token
 
 
+async def create_refresh_token(
+    db: AsyncSession, user_id: int, token: str
+) -> RefreshTokenModel:
+    refresh_token = RefreshTokenModel.create(
+        user_id=user_id, days_valid=settings.LOGIN_TIME_DAYS, token=token
+    )
+    db.add(refresh_token)
+    await db.flush()
+    return refresh_token
+
+
 async def get_user_with_activation_tokens(
     db: AsyncSession, email: str
 ) -> UserModel | None:
@@ -53,7 +73,16 @@ async def get_user_with_activation_tokens(
 async def delete_activation_token_by_user_id(db: AsyncSession, user_id: int) -> None:
     stmt = select(ActivationTokenModel).where(ActivationTokenModel.user_id == user_id)
     result = await db.execute(stmt)
-    token = result.scalar_one_or_none()
+    token = result.scalars().first()
+    if token:
+        await db.delete(token)
+        await db.flush()
+
+
+async def delete_refresh_tokens_by_user_id(db: AsyncSession, user_id: int) -> None:
+    stmt = select(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id)
+    result = await db.execute(stmt)
+    token = result.scalars().first()
     if token:
         await db.delete(token)
         await db.flush()

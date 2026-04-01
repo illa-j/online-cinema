@@ -14,15 +14,20 @@ from schemas import (
     UserRegistrationResponseSchema,
     MessageResponseSchema,
     ActivationTokenRenewalRequestSchema,
+    UserLoginRequestSchema,
+    UserLoginResponseSchema,
 )
 from repositories.accounts import (
+    create_refresh_token,
     get_user_by_email,
     get_default_user_group,
     create_user,
     create_activation_token,
     get_user_with_activation_tokens,
     delete_activation_token_by_user_id,
+    delete_refresh_tokens_by_user_id,
 )
+from security.interfaces import JWTAuthManagerInterface
 from security.utils import generate_secure_token
 
 
@@ -177,3 +182,41 @@ async def renew_activation_token_service(
         f"http://127.0.0.1:8000/api/v1/accounts/activate/",
     )
     return MessageResponseSchema(message="New activation token has been sent.")
+
+
+async def login_user_service(
+    login_data: UserLoginRequestSchema,
+    jwt_manager: JWTAuthManagerInterface,
+    db: AsyncSession,
+) -> UserLoginResponseSchema:
+    user = await get_user_by_email(db, login_data.email)
+    if user is None or not user.verify_password(login_data.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password.",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is not activated.",
+        )
+
+    jwt_refresh_token = jwt_manager.create_refresh_token({"user_id": user.id})
+
+    try:
+        await delete_refresh_tokens_by_user_id(db, user.id)
+        await create_refresh_token(db, user.id, jwt_refresh_token)
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while processing the request: {e}",
+        ) from e
+
+    jwt_access_token = jwt_manager.create_access_token({"user_id": user.id})
+    return UserLoginResponseSchema(
+        access_token=jwt_access_token,
+        refresh_token=jwt_refresh_token,
+    )

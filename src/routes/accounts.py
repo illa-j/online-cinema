@@ -41,6 +41,7 @@ from config import get_jwt_auth_manager, get_settings, get_current_user
 from security.utils import generate_secure_token
 from services.accounts import (
     activate_user_service,
+    login_user_service,
     register_user_service,
     renew_activation_token_service,
 )
@@ -284,47 +285,8 @@ async def login_user(
     Returns:
         UserLoginResponseSchema: Access and refresh tokens for authenticated user.
     """
-    stmt = await db.execute(
-        select(UserModel).where(UserModel.email == login_data.email)
-    )
-    user = stmt.scalars().first()
-    if user is None or not user.verify_password(login_data.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password.",
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is not activated.",
-        )
-
-    jwt_refresh_token = jwt_manager.create_refresh_token({"user_id": user.id})
-
-    try:
-        await db.execute(
-            delete(RefreshTokenModel).where(RefreshTokenModel.user_id == user.id)
-        )
-
-        refresh_token = RefreshTokenModel.create(
-            user_id=user.id,
-            days_valid=settings.LOGIN_TIME_DAYS,
-            token=jwt_refresh_token,
-        )
-        db.add(refresh_token)
-        await db.commit()
-    except SQLAlchemyError as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while processing the request.",
-        ) from e
-
-    jwt_access_token = jwt_manager.create_access_token({"user_id": user.id})
-    return UserLoginResponseSchema(
-        access_token=jwt_access_token,
-        refresh_token=jwt_refresh_token,
+    return await login_user_service(
+        login_data=login_data, jwt_manager=jwt_manager, db=db
     )
 
 

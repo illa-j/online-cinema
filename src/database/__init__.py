@@ -21,4 +21,7 @@ if environment == "testing":
         reset_database,
     )
 else:
-    from database.session_postgresql import get_postgresql_db as get_db
+    from database.session_postgresql import (
+        get_postgresql_db as get_db,
+        sync_postgresql_engine,
+    )
