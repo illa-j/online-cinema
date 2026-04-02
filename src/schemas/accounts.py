@@ -25,6 +25,10 @@ class UserRegistrationRequestSchema(BaseEmailPasswordSchema):
     pass
 
 
+class UserCreateSchema(BaseEmailPasswordSchema):
+    group_id: int
+
+
 class PasswordResetRequestSchema(BaseModel):
     email: EmailStr
 
@@ -90,4 +94,9 @@ class TokenRefreshResponseSchema(BaseModel):
 
 
 class ChangeUserGroupRequestSchema(BaseModel):
+    email: EmailStr
     group: UserGroupEnum
+
+
+class ActivateUserManuallyRequestSchema(BaseModel):
+    email: EmailStr
