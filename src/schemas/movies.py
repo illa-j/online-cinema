@@ -68,7 +68,6 @@ class MovieBaseSchema(BaseModel):
     gross: Optional[float] = Field(None, ge=0)
     description: str = Field(..., max_length=10_000)
     price: Decimal = Field(..., ge=0, max_digits=10, decimal_places=2)
-    certification_id: int = Field(..., ge=1)
 
     model_config = {"from_attributes": True}
 
@@ -82,9 +81,10 @@ class MovieBaseSchema(BaseModel):
 
 
 class MovieCreateSchema(MovieBaseSchema):
-    genre_ids: list[int] = Field(default_factory=list)
-    star_ids: list[int] = Field(default_factory=list)
-    director_ids: list[int] = Field(default_factory=list)
+    certification_name: str = Field(..., max_length=255)
+    genre_names: list[str] = Field(default_factory=list)
+    star_names: list[str] = Field(default_factory=list)
+    director_names: list[str] = Field(default_factory=list)
 
     model_config = {
         "from_attributes": True,
@@ -102,10 +102,10 @@ class MovieUpdateSchema(BaseModel):
     gross: Optional[float] = Field(None, ge=0)
     description: Optional[str] = Field(None, max_length=10_000)
     price: Optional[Decimal] = Field(None, ge=0, max_digits=10, decimal_places=2)
-    certification_id: Optional[int] = Field(None, ge=1)
-    genre_ids: Optional[list[int]] = None
-    star_ids: Optional[list[int]] = None
-    director_ids: Optional[list[int]] = None
+    certification_name: Optional[str] = Field(None, max_length=255)
+    genre_names: Optional[list[str]] = None
+    star_names: Optional[list[str]] = None
+    director_names: Optional[list[str]] = None
 
     model_config = {
         "from_attributes": True,

@@ -25,10 +25,10 @@ movie_create_schema_example = {
     "gross": 154000000.0,
     "description": "An amazing movie.",
     "price": "19.99",
-    "certification_id": 2,
-    "genre_ids": [1, 2],
-    "star_ids": [3, 4],
-    "director_ids": [5],
+    "certification_name": "PG-13",
+    "genre_names": ["Comedy", "Action"],
+    "star_names": ["Chris Evans", "Scarlett Johansson"],
+    "director_names": ["Christopher Nolan"],
 }
 
 
@@ -59,7 +59,7 @@ movie_detail_schema_example = {
     "gross": 154000000.0,
     "description": "An amazing movie.",
     "price": "19.99",
-    "certification_id": 2,
+    "certification_name": "PG-13",
     "certification": certification_schema_example,
     "genres": [genre_schema_example],
     "stars": [star_schema_example],
@@ -73,5 +73,5 @@ movie_update_schema_example = {
     "meta_score": 80.0,
     "description": "Updated movie description.",
     "price": "17.99",
-    "genre_ids": [1],
+    "genre_names": ["Comedy", "Action", "Adventure"],
 }
