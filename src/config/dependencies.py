@@ -5,7 +5,10 @@ from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import BaseAppSettings, get_settings
-from database import get_db, UserModel, UserGroupEnum
+from database import UserModel, UserGroupEnum
+from database import get_db
+
+
 from exceptions.security import BaseSecurityError
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager

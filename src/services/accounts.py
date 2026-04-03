@@ -4,13 +4,13 @@ from fastapi import HTTPException, status, BackgroundTasks
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import UserModel, UserGroupEnum
+from database import UserModel
 from exceptions.security import BaseSecurityError
 from notifications import (
     send_activation_complete_email,
     send_activation_email,
     send_password_reset_complete_email,
-    send_password_reset_email
+    send_password_reset_email,
 )
 from schemas import (
     UserRegistrationRequestSchema,
@@ -26,7 +26,7 @@ from schemas import (
     TokenRefreshResponseSchema,
     PasswordResetCompleteRequestSchema,
     ChangeUserGroupRequestSchema,
-    ActivateUserManuallyRequestSchema
+    ActivateUserManuallyRequestSchema,
 )
 from repositories.accounts import (
     create_password_reset_token,
@@ -42,7 +42,6 @@ from repositories.accounts import (
     get_user_with_activation_tokens_by_email,
     delete_activation_token_by_user_id,
     delete_refresh_tokens_by_user_id,
-    get_user_with_group_by_id,
     get_user_with_password_reset_tokens_by_email,
 )
 from security.interfaces import JWTAuthManagerInterface
@@ -243,7 +242,7 @@ async def login_user_service(
 async def logout_user_service(
     data: UserLogoutRequestSchema,
     jwt_manager: JWTAuthManagerInterface,
-    db: AsyncSession
+    db: AsyncSession,
 ) -> MessageResponseSchema:
     try:
         payload = jwt_manager.decode_refresh_token(data.refresh_token)
@@ -293,7 +292,7 @@ async def logout_user_service(
 async def renew_access_token_service(
     data: AccessTokenRenewalRequestSchema,
     jwt_manager: JWTAuthManagerInterface,
-    db: AsyncSession
+    db: AsyncSession,
 ) -> TokenRefreshResponseSchema:
     try:
         payload = jwt_manager.decode_refresh_token(data.refresh_token)
@@ -335,8 +334,7 @@ async def renew_access_token_service(
 
 
 async def reset_user_password_service(
-    data: UserLoginRequestSchema,
-    db: AsyncSession
+    data: UserLoginRequestSchema, db: AsyncSession
 ) -> MessageResponseSchema:
     user = await get_user_by_email(db, data.email)
 
@@ -360,9 +358,7 @@ async def reset_user_password_service(
 
 
 async def password_reset_request_service(
-    email: str,
-    background_tasks: BackgroundTasks,
-    db: AsyncSession
+    email: str, background_tasks: BackgroundTasks, db: AsyncSession
 ) -> MessageResponseSchema:
     GENERIC_RESPONSE = MessageResponseSchema(
         message="If an account with this email exists, password reset instructions have been sent."

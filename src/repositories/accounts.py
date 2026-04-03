@@ -8,10 +8,10 @@ from database import (
     UserGroupEnum,
     ActivationTokenModel,
     RefreshTokenModel,
+    PasswordResetTokenModel,
 )
-from database.models.accounts import PasswordResetTokenModel
 from schemas import UserCreateSchema
-from config import get_settings
+from config.dependencies import get_settings
 
 settings = get_settings()
 
@@ -44,7 +44,9 @@ async def get_user_with_group_by_id(db: AsyncSession, user_id: int) -> UserModel
     return result.scalars().first()
 
 
-async def get_user_group_by_name(db: AsyncSession, group_name: UserGroupEnum) -> UserGroupModel | None:
+async def get_user_group_by_name(
+    db: AsyncSession, group_name: UserGroupEnum
+) -> UserGroupModel | None:
     stmt = select(UserGroupModel).where(UserGroupModel.name == group_name)
     result = await db.execute(stmt)
     return result.scalars().first()
@@ -109,16 +111,16 @@ async def create_refresh_token(
 async def create_password_reset_token(
     db: AsyncSession, user_id: int, token: str
 ) -> PasswordResetTokenModel:
-    reset_token = PasswordResetTokenModel(
-        user_id=user_id
-    )
+    reset_token = PasswordResetTokenModel(user_id=user_id)
     reset_token.token = token
     db.add(reset_token)
     await db.flush()
     return reset_token
 
 
-async def get_refresh_token_by_user_id(db: AsyncSession, user_id: int) -> RefreshTokenModel | None:
+async def get_refresh_token_by_user_id(
+    db: AsyncSession, user_id: int
+) -> RefreshTokenModel | None:
     stmt = select(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id)
     result = await db.execute(stmt)
     return result.scalars().first()
@@ -142,8 +144,12 @@ async def delete_refresh_tokens_by_user_id(db: AsyncSession, user_id: int) -> No
         await db.flush()
 
 
-async def delete_password_reset_tokens_by_user_id(db: AsyncSession, user_id: int) -> None:
-    stmt = select(PasswordResetTokenModel).where(PasswordResetTokenModel.user_id == user_id)
+async def delete_password_reset_tokens_by_user_id(
+    db: AsyncSession, user_id: int
+) -> None:
+    stmt = select(PasswordResetTokenModel).where(
+        PasswordResetTokenModel.user_id == user_id
+    )
     result = await db.execute(stmt)
     token = result.scalars().first()
     if token:

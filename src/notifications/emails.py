@@ -2,7 +2,7 @@ from fastapi_mail import FastMail, MessageSchema
 
 from jinja2 import Environment, FileSystemLoader
 
-from config import get_settings
+from config.dependencies import get_settings
 from notifications.conf import conf
 
 settings = get_settings()

@@ -3,10 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Depends, status, BackgroundTasks
 
-from database import (
-    UserModel,
-    UserGroupEnum
-)
+from database import UserModel, UserGroupEnum
 from database import get_db
 from schemas import (
     UserRegistrationResponseSchema,
@@ -23,10 +20,10 @@ from schemas import (
     AccessTokenRenewalRequestSchema,
     ChangeUserGroupRequestSchema,
     UserResetPasswordRequestSchema,
-    ActivateUserManuallyRequestSchema
+    ActivateUserManuallyRequestSchema,
 )
 from security.interfaces import JWTAuthManagerInterface
-from config import get_jwt_auth_manager, get_settings, require_roles
+from config.dependencies import get_jwt_auth_manager, get_settings, require_roles
 from services.accounts import (
     activate_user_manually_service,
     activate_user_service,
@@ -648,7 +645,7 @@ async def password_reset_complete(
 async def change_user_group(
     data: ChangeUserGroupRequestSchema,
     current_user: UserModel = Depends(require_roles(UserGroupEnum.ADMIN)),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Change the group of a specified user.
@@ -670,9 +667,7 @@ async def change_user_group(
     Returns:
         MessageResponseSchema: Confirmation message indicating successful group update.
     """
-    return await change_user_group_service(
-        data=data, db=db
-    )
+    return await change_user_group_service(data=data, db=db)
 
 
 @router.patch(
@@ -734,7 +729,7 @@ async def change_user_group(
 async def activate_user_manually(
     data: ActivateUserManuallyRequestSchema,
     current_user: UserModel = Depends(require_roles(UserGroupEnum.ADMIN)),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Manually activate a user account.
@@ -756,6 +751,4 @@ async def activate_user_manually(
         MessageResponseSchema: Confirmation message indicating whether the user
         was already active or successfully activated.
     """
-    return await activate_user_manually_service(
-        data=data, db=db
-    )
+    return await activate_user_manually_service(data=data, db=db)
