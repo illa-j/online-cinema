@@ -2,6 +2,7 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    CheckConstraint,
     Integer,
     String,
     Float,
@@ -92,7 +93,7 @@ class DirectorModel(Base):
     __tablename__ = "directors"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    name: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
 
     movies: Mapped[list["MovieModel"]] = relationship(
         "MovieModel", secondary=MoviesDirectorsModel, back_populates="directors"
@@ -158,6 +159,13 @@ class MovieModel(Base):
 
     __table_args__ = (
         UniqueConstraint("name", "year", "time", name="unique_movie_constraint"),
+        CheckConstraint("imdb >= 0 AND imdb <= 10", name="check_imdb_range"),
+        CheckConstraint("votes >= 0", name="check_votes_non_negative"),
+        CheckConstraint(
+            "meta_score >= 0 AND meta_score <= 100", name="check_meta_score_range"
+        ),
+        CheckConstraint("gross >= 0", name="check_gross_non_negative"),
+        CheckConstraint("price >= 0", name="check_price_non_negative"),
     )
 
     @classmethod
