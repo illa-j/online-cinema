@@ -1,10 +1,7 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, status, BackgroundTasks
 
 from database import (
     UserModel,
@@ -29,7 +26,7 @@ from schemas import (
     ActivateUserManuallyRequestSchema
 )
 from security.interfaces import JWTAuthManagerInterface
-from config import get_jwt_auth_manager, get_settings, get_current_user
+from config import get_jwt_auth_manager, get_settings, require_roles
 from services.accounts import (
     activate_user_manually_service,
     activate_user_service,
@@ -650,8 +647,8 @@ async def password_reset_complete(
 )
 async def change_user_group(
     data: ChangeUserGroupRequestSchema,
-    current_user_id: int = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(require_roles(UserGroupEnum.ADMIN)),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Change the group of a specified user.
@@ -674,7 +671,7 @@ async def change_user_group(
         MessageResponseSchema: Confirmation message indicating successful group update.
     """
     return await change_user_group_service(
-        data=data, current_user_id=current_user_id, db=db
+        data=data, db=db
     )
 
 
@@ -736,8 +733,8 @@ async def change_user_group(
 )
 async def activate_user_manually(
     data: ActivateUserManuallyRequestSchema,
-    current_user_id: int = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(require_roles(UserGroupEnum.ADMIN)),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Manually activate a user account.
@@ -760,5 +757,5 @@ async def activate_user_manually(
         was already active or successfully activated.
     """
     return await activate_user_manually_service(
-        data=data, current_user_id=current_user_id, db=db
+        data=data, db=db
     )

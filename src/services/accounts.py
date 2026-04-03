@@ -453,26 +453,8 @@ async def password_reset_complete_service(
 
 async def change_user_group_service(
     data: ChangeUserGroupRequestSchema,
-    current_user_id: int,
     db: AsyncSession,
 ) -> MessageResponseSchema:
-    current_user = await get_user_with_group_by_id(db, current_user_id)
-
-    if current_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User was not found."
-        )
-
-    if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive."
-        )
-
-    if current_user.group.name != UserGroupEnum.ADMIN.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions."
-        )
-
     user = await get_user_by_email(db, data.email)
 
     if user is None:
@@ -502,26 +484,8 @@ async def change_user_group_service(
 
 async def activate_user_manually_service(
     data: ActivateUserManuallyRequestSchema,
-    current_user_id: int,
     db: AsyncSession,
 ) -> MessageResponseSchema:
-    current_user = await get_user_with_group_by_id(db, current_user_id)
-
-    if current_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User was not found."
-        )
-
-    if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive."
-        )
-
-    if current_user.group.name != UserGroupEnum.ADMIN.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions."
-        )
-
     user = await get_user_by_email(db, data.email)
 
     if user is None:
