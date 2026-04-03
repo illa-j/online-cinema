@@ -1,31 +1,17 @@
-import os
+from typing import Callable
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from config.settings import BaseAppSettings, Settings, TestingSettings
+from config.settings import BaseAppSettings, get_settings
+from database import get_db, UserModel, UserGroupEnum
 from exceptions.security import BaseSecurityError
 from security.interfaces import JWTAuthManagerInterface
 from security.token_manager import JWTAuthManager
+from repositories.accounts import get_user_with_group_by_id
 
 security = HTTPBearer()
-
-
-def get_settings() -> BaseAppSettings:
-    """
-    Retrieve the application settings based on the current environment.
-
-    This function reads the 'ENVIRONMENT' environment variable (defaulting to 'developing' if not set)
-    and returns a corresponding settings instance. If the environment is 'testing', it returns an instance
-    of TestingSettings; otherwise, it returns an instance of Settings.
-
-    Returns:
-        BaseAppSettings: The settings instance appropriate for the current environment.
-    """
-    environment = os.getenv("ENVIRONMENT", "developing")
-    if environment == "testing":
-        return TestingSettings()
-    return Settings()
 
 
 def get_jwt_auth_manager(
@@ -75,3 +61,35 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token."
         )
     return payload["user_id"]
+
+
+async def get_current_user_with_group(
+    current_user_id: int = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserModel:
+    user = await get_user_with_group_by_id(db, current_user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User was not found.",
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is inactive.",
+        )
+    return user
+
+
+def require_roles(*allowed_roles: UserGroupEnum) -> Callable:
+    async def role_checker(
+        current_user: UserModel = Depends(get_current_user_with_group),
+    ) -> UserModel:
+        if current_user.group.name not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions.",
+            )
+        return current_user
+
+    return role_checker
