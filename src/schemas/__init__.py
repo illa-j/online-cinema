@@ -15,5 +15,16 @@ from schemas.accounts import (
     UserLogoutRequestSchema,
     UserResetPasswordRequestSchema,
     UserCreateSchema,
-    ActivateUserManuallyRequestSchema
+    ActivateUserManuallyRequestSchema,
+)
+from schemas.movies import (
+    StarSchema,
+    GenreSchema,
+    DirectorSchema,
+    CertificationSchema,
+    MovieListItemSchema,
+    MovieListResponseSchema,
+    MovieDetailSchema,
+    MovieCreateSchema,
+    MovieUpdateSchema,
 )
