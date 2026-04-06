@@ -112,3 +112,10 @@ async def get_movie_detail_service(movie_id: int, db: AsyncSession) -> MovieMode
         raise HTTPException(status_code=404, detail="Movie not found.")
     return movie
 
+
+async def delete_movie_service(movie_id: int, db: AsyncSession) -> None:
+    movie = await get_movie_by_id_with_all_related_fields(db, movie_id)
+    if not movie:
+        raise HTTPException(status_code=404, detail="Movie not found.")
+    await db.delete(movie)
+    await db.commit()

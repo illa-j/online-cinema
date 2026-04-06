@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.dependencies import require_roles
 from database import UserGroupEnum, UserModel, get_db
 from schemas import MovieListResponseSchema, MovieDetailSchema, MovieCreateSchema
-from services.movies import create_movie_service, get_movie_detail_service, get_movie_list_service
+from services.movies import create_movie_service, delete_movie_service, get_movie_detail_service, get_movie_list_service
 
 router = APIRouter()
 
@@ -143,3 +143,49 @@ async def get_movie_detail(movie_id: int, db: AsyncSession = Depends(get_db)):
     :raises HTTPException: Raises a 404 error if the movie with the specified ID is not found.
     """
     return await get_movie_detail_service(movie_id=movie_id, db=db)
+
+
+@router.delete(
+    "/{movie_id}/",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a movie by ID",
+    description=(
+        "<h3>This endpoint allows admins or moderators to delete a specific movie by its ID. "
+        "If the movie exists, it will be removed from the database. If the movie does not exist, "
+        "a 404 error will be returned.</h3>"
+    ),
+    responses={
+        204: {
+            "description": "Movie deleted successfully.",
+        },
+        404: {
+            "description": "Movie not found.",
+            "content": {
+                "application/json": {"example": {"detail": "Movie not found."}}
+            },
+        },
+    }
+)
+async def delete_movie(
+    movie_id: int,
+    current_user: UserModel = Depends(
+        require_roles(UserGroupEnum.ADMIN, UserGroupEnum.MODERATOR)
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Delete a specific movie by its ID.
+
+    This endpoint allows authorized users (admins or moderators) to delete a movie from the database.
+    If the movie exists, it will be removed. If it does not exist, a 404 error will be returned.
+
+    :param movie_id: The unique identifier of the movie to delete.
+    :type movie_id: int
+    :param db: The SQLAlchemy async database session (provided via dependency injection).
+    :type db: AsyncSession
+
+    :raises HTTPException:
+        - 204 if the movie was deleted successfully.
+        - 404 if the movie with the specified ID is not found.
+    """
+    return await delete_movie_service(movie_id=movie_id, db=db)
