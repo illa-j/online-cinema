@@ -130,6 +130,10 @@ class MovieListItemSchema(BaseModel):
     year: int
     time: int
     imdb: float
+    votes: int
+    meta_score: Optional[float]
+    gross: Optional[float]
+    price: Decimal
 
     model_config = {
         "from_attributes": True,

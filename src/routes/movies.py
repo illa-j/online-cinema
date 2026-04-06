@@ -4,13 +4,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.dependencies import require_roles
 from database import UserGroupEnum, UserModel, get_db
 from schemas import MovieListResponseSchema, MovieDetailSchema, MovieCreateSchema
-from services.movies import create_movie_service, get_movie_list_service
+from services.movies import create_movie_service, get_movie_detail_service, get_movie_list_service
 
 router = APIRouter()
 
 
 @router.get(
-    "/movies/",
+    "/",
     response_model=MovieListResponseSchema,
     summary="Get a paginated list of movies",
     description=(
@@ -56,7 +56,7 @@ async def get_movie_list(
 
 
 @router.post(
-    "/movies/",
+    "/",
     response_model=MovieDetailSchema,
     status_code=status.HTTP_201_CREATED,
     summary="Add a new movie",
@@ -105,3 +105,41 @@ async def create_movie(
         - 400 if input data is invalid (e.g., violating a constraint).
     """
     return await create_movie_service(movie_data=movie_data, db=db)
+
+
+@router.get(
+    "/{movie_id}/",
+    response_model=MovieDetailSchema,
+    summary="Get movie details by ID",
+    description=(
+        "<h3>This endpoint retrieves detailed information about a specific movie by its ID. "
+        "The response includes all attributes of the movie, as well as related entities such as "
+        "certification, genres, stars, and directors.</h3>"
+    ),
+    responses={
+        404: {
+            "description": "Movie not found.",
+            "content": {
+                "application/json": {"example": {"detail": "Movie not found."}}
+            },
+        }
+    },
+)
+async def get_movie_detail(movie_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Retrieve detailed information about a specific movie by its ID.
+
+    This endpoint fetches a movie's details, including all attributes and related entities
+    such as certification, genres, stars, and directors.
+
+    :param movie_id: The unique identifier of the movie to retrieve.
+    :type movie_id: int
+    :param db: The SQLAlchemy async database session (provided via dependency injection).
+    :type db: AsyncSession
+
+    :return: Detailed information about the requested movie.
+    :rtype: MovieDetailSchema
+
+    :raises HTTPException: Raises a 404 error if the movie with the specified ID is not found.
+    """
+    return await get_movie_detail_service(movie_id=movie_id, db=db)

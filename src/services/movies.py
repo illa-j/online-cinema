@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import MovieModel
-from repositories.movies import create_movie, get_movies, get_movies_quantity
+from repositories.movies import create_movie, get_movie_by_id_with_all_related_fields, get_movies, get_movies_quantity
 from schemas import MovieListResponseSchema, MovieListItemSchema, MovieCreateSchema
 
 CONSTRAINT_ERRORS = {
@@ -104,3 +104,11 @@ async def create_movie_service(
             detail="An unexpected database error occurred.",
         ) from e
     return movie
+
+
+async def get_movie_detail_service(movie_id: int, db: AsyncSession) -> MovieModel:
+    movie = await get_movie_by_id_with_all_related_fields(db, movie_id)
+    if not movie:
+        raise HTTPException(status_code=404, detail="Movie not found.")
+    return movie
+
