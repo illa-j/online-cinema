@@ -27,4 +27,5 @@ from schemas.movies import (
     MovieDetailSchema,
     MovieCreateSchema,
     MovieUpdateSchema,
+    MoviePartiallyUpdateSchema,
 )

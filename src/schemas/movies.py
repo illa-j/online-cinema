@@ -92,7 +92,7 @@ class MovieCreateSchema(MovieBaseSchema):
     }
 
 
-class MovieUpdateSchema(BaseModel):
+class MoviePartiallyUpdateSchema(BaseModel):
     name: Optional[str] = Field(None, max_length=255)
     year: Optional[int] = Field(None, ge=1888)
     time: Optional[int] = Field(None, gt=0)
@@ -102,10 +102,10 @@ class MovieUpdateSchema(BaseModel):
     gross: Optional[float] = Field(None, ge=0)
     description: Optional[str] = Field(None, max_length=10_000)
     price: Optional[Decimal] = Field(None, ge=0, max_digits=10, decimal_places=2)
-    certification_name: Optional[str] = Field(None, max_length=255)
-    genre_names: Optional[list[str]] = None
-    star_names: Optional[list[str]] = None
-    director_names: Optional[list[str]] = None
+    certification_id: Optional[int] = Field(None, ge=1)
+    genre_ids: Optional[list[int]] = None
+    star_ids: Optional[list[int]] = None
+    director_ids: Optional[list[int]] = None
 
     model_config = {
         "from_attributes": True,
@@ -121,6 +121,27 @@ class MovieUpdateSchema(BaseModel):
         if value > current_year + 1:
             raise ValueError(f"Year cannot be greater than {current_year + 1}.")
         return value
+
+
+class MovieUpdateSchema(BaseModel):
+    name: str = Field(..., max_length=255)
+    year: int = Field(..., ge=1888)
+    time: int = Field(..., gt=0)
+    imdb: float = Field(..., ge=0, le=10)
+    votes: int = Field(..., ge=0)
+    meta_score: Optional[float] = Field(None, ge=0, le=100)
+    gross: Optional[float] = Field(None, ge=0)
+    description: str = Field(..., max_length=10_000)
+    price: Decimal = Field(..., ge=0, max_digits=10, decimal_places=2)
+    certification_id: int = Field(..., ge=1)
+    genre_ids: list[int] = Field(default_factory=list)
+    star_ids: list[int] = Field(default_factory=list)
+    director_ids: list[int] = Field(default_factory=list)
+
+    model_config = {
+        "from_attributes": True,
+        "json_schema_extra": {"examples": [movie_update_schema_example]},
+    }
 
 
 class MovieListItemSchema(BaseModel):

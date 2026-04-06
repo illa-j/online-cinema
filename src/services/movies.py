@@ -5,8 +5,25 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import MovieModel
-from repositories.movies import create_movie, get_movie_by_id_with_all_related_fields, get_movies, get_movies_quantity
-from schemas import MovieListResponseSchema, MovieListItemSchema, MovieCreateSchema
+from repositories.movies import (
+    create_movie,
+    get_certification_by_id,
+    get_director_by_ids,
+    get_genre_by_ids,
+    get_movie_by_id_with_all_related_fields,
+    get_movies,
+    get_movies_quantity,
+    get_star_by_ids,
+    update_movie,
+    partially_update_movie,
+)
+from schemas import (
+    MovieListResponseSchema,
+    MovieListItemSchema,
+    MovieCreateSchema,
+    MovieUpdateSchema,
+    MoviePartiallyUpdateSchema,
+)
 
 CONSTRAINT_ERRORS = {
     "unique_movie_constraint": (
@@ -110,6 +127,153 @@ async def get_movie_detail_service(movie_id: int, db: AsyncSession) -> MovieMode
     movie = await get_movie_by_id_with_all_related_fields(db, movie_id)
     if not movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
+    return movie
+
+
+async def update_movie_service(
+    movie_id: int, movie_data: MovieUpdateSchema, db: AsyncSession
+) -> MovieModel:
+    movie = await get_movie_by_id_with_all_related_fields(db, movie_id)
+
+    if not movie:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found."
+        )
+
+    if movie_data.certification_id is not None:
+        certification = await get_certification_by_id(db, movie_data.certification_id)
+        if not certification:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid certification ID",
+            )
+        movie.certification = certification
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Certification ID must be provided for update",
+        )
+
+    if len(movie_data.genre_ids) != 0:
+        genres = await get_genre_by_ids(db, movie_data.genre_ids)
+        if len(genres) != len(movie_data.genre_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid genre IDs"
+            )
+        movie.genres = genres
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Genre IDs must be provided for update",
+        )
+
+    if len(movie_data.star_ids) != 0:
+        stars = await get_star_by_ids(db, movie_data.star_ids)
+        if len(stars) != len(movie_data.star_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid star IDs"
+            )
+        movie.stars = stars
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Star IDs must be provided for update",
+        )
+
+    if len(movie_data.director_ids) != 0:
+        directors = await get_director_by_ids(db, movie_data.director_ids)
+        if len(directors) != len(movie_data.director_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid director IDs"
+            )
+        movie.directors = directors
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Director IDs must be provided for update",
+        )
+
+    try:
+        movie = await update_movie(db, movie, movie_data)
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        constraint_name = extract_constraint_name(e)
+        if constraint_name and constraint_name in CONSTRAINT_ERRORS:
+            status_code, detail = CONSTRAINT_ERRORS[constraint_name]
+            raise HTTPException(status_code=status_code, detail=detail)
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid input data."
+        )
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected database error occurred.",
+        ) from e
+    return movie
+
+
+async def partially_update_movie_service(
+    movie_id: int, movie_data: MoviePartiallyUpdateSchema, db: AsyncSession
+) -> MovieModel:
+    movie = await get_movie_by_id_with_all_related_fields(db, movie_id)
+    if not movie:
+        raise HTTPException(status_code=404, detail="Movie not found.")
+
+    if movie_data.certification_id is not None:
+        certification = await get_certification_by_id(db, movie_data.certification_id)
+        if not certification:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid certification ID",
+            )
+        movie.certification = certification
+
+    if movie_data.genre_ids is not None:
+        genres = await get_genre_by_ids(db, movie_data.genre_ids)
+        if len(genres) != len(movie_data.genre_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid genre IDs"
+            )
+        movie.genres = genres
+
+    if movie_data.star_ids is not None:
+        stars = await get_star_by_ids(db, movie_data.star_ids)
+        if len(stars) != len(movie_data.star_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid star IDs"
+            )
+        movie.stars = stars
+
+    if movie_data.director_ids is not None:
+        directors = await get_director_by_ids(db, movie_data.director_ids)
+        if len(directors) != len(movie_data.director_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid director IDs"
+            )
+        movie.directors = directors
+
+    try:
+        movie = await partially_update_movie(db, movie, movie_data)
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        constraint_name = extract_constraint_name(e)
+        if constraint_name and constraint_name in CONSTRAINT_ERRORS:
+            status_code, detail = CONSTRAINT_ERRORS[constraint_name]
+            raise HTTPException(status_code=status_code, detail=detail)
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid input data."
+        )
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected database error occurred.",
+        ) from e
     return movie
 
 

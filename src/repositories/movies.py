@@ -9,7 +9,19 @@ from database import (
     StarModel,
     DirectorModel,
 )
-from schemas import MovieCreateSchema
+from schemas import MovieCreateSchema, MovieUpdateSchema, MoviePartiallyUpdateSchema
+
+
+async def get_genre_by_id(db: AsyncSession, genre_id: int):
+    stmt = select(GenreModel).where(GenreModel.id == genre_id)
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
+async def get_genre_by_ids(db: AsyncSession, genre_ids: list[int]) -> list[GenreModel]:
+    stmt = select(GenreModel).where(GenreModel.id.in_(genre_ids))
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 
 async def get_genre_by_name(db: AsyncSession, name: str):
@@ -26,6 +38,22 @@ async def create_genre(db: AsyncSession, name: str):
     return new_genre
 
 
+async def get_certification_by_id(db: AsyncSession, certification_id: int):
+    stmt = select(CertificationModel).where(CertificationModel.id == certification_id)
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
+async def get_certification_by_ids(
+    db: AsyncSession, certification_ids: list[int]
+) -> list[CertificationModel]:
+    stmt = select(CertificationModel).where(
+        CertificationModel.id.in_(certification_ids)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
 async def get_certification_by_name(db: AsyncSession, name: str):
     stmt = select(CertificationModel).where(CertificationModel.name == name)
     result = await db.execute(stmt)
@@ -40,6 +68,18 @@ async def create_certification(db: AsyncSession, name: str):
     return new_certification
 
 
+async def get_star_by_id(db: AsyncSession, star_id: int):
+    stmt = select(StarModel).where(StarModel.id == star_id)
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
+async def get_star_by_ids(db: AsyncSession, star_ids: list[int]) -> list[StarModel]:
+    stmt = select(StarModel).where(StarModel.id.in_(star_ids))
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
 async def get_star_by_name(db: AsyncSession, name: str):
     stmt = select(StarModel).where(StarModel.name == name)
     result = await db.execute(stmt)
@@ -52,6 +92,20 @@ async def create_star(db: AsyncSession, name: str):
     await db.flush()
     await db.refresh(new_star)
     return new_star
+
+
+async def get_director_by_id(db: AsyncSession, director_id: int):
+    stmt = select(DirectorModel).where(DirectorModel.id == director_id)
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
+async def get_director_by_ids(
+    db: AsyncSession, director_ids: list[int]
+) -> list[DirectorModel]:
+    stmt = select(DirectorModel).where(DirectorModel.id.in_(director_ids))
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 
 async def get_director_by_name(db: AsyncSession, name: str):
@@ -151,3 +205,30 @@ async def create_movie(db: AsyncSession, movie_data: MovieCreateSchema) -> Movie
     await db.flush()
     new_movie = await get_movie_by_id_with_all_related_fields(db, new_movie.id)
     return new_movie
+
+
+async def update_movie(
+    db: AsyncSession, movie: MovieModel, movie_data: MovieUpdateSchema
+) -> MovieModel:
+    for field, value in movie_data.model_dump(
+        exclude={"certification_id", "genre_ids", "star_ids", "director_ids"}
+    ).items():
+        setattr(movie, field, value)
+
+    await db.flush()
+    updated_movie = await get_movie_by_id_with_all_related_fields(db, movie.id)
+    return updated_movie
+
+
+async def partially_update_movie(
+    db: AsyncSession, movie: MovieModel, movie_data: MoviePartiallyUpdateSchema
+) -> MovieModel:
+    for field, value in movie_data.model_dump(
+        exclude={"certification_id", "genre_ids", "star_ids", "director_ids"}
+    ).items():
+        if value is not None:
+            setattr(movie, field, value)
+
+    await db.flush()
+    updated_movie = await get_movie_by_id_with_all_related_fields(db, movie.id)
+    return updated_movie

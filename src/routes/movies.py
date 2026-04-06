@@ -3,8 +3,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.dependencies import require_roles
 from database import UserGroupEnum, UserModel, get_db
-from schemas import MovieListResponseSchema, MovieDetailSchema, MovieCreateSchema
-from services.movies import create_movie_service, delete_movie_service, get_movie_detail_service, get_movie_list_service
+from schemas import (
+    MovieListResponseSchema,
+    MovieDetailSchema,
+    MovieCreateSchema,
+    MovieUpdateSchema,
+    MoviePartiallyUpdateSchema,
+)
+from services.movies import (
+    create_movie_service,
+    delete_movie_service,
+    get_movie_detail_service,
+    get_movie_list_service,
+    partially_update_movie_service,
+    update_movie_service,
+)
 
 router = APIRouter()
 
@@ -145,6 +158,121 @@ async def get_movie_detail(movie_id: int, db: AsyncSession = Depends(get_db)):
     return await get_movie_detail_service(movie_id=movie_id, db=db)
 
 
+@router.put(
+    "/{movie_id}/",
+    response_model=MovieDetailSchema,
+    summary="Update movie details by ID",
+    description=(
+        "<h3>This endpoint allows admins or moderators to update the details of a specific movie by its ID. "
+        "Clients can provide any subset of the movie's attributes to update. The response includes the updated movie details.</h3>"
+    ),
+    responses={
+        200: {
+            "description": "Movie updated successfully.",
+        },
+        400: {
+            "description": "Invalid input.",
+            "content": {
+                "application/json": {"example": {"detail": "Invalid input data."}}
+            },
+        },
+        404: {
+            "description": "Movie not found.",
+            "content": {
+                "application/json": {"example": {"detail": "Movie not found."}}
+            },
+        },
+    },
+)
+async def update_movie(
+    movie_id: int,
+    movie_data: MovieUpdateSchema,
+    current_user: UserModel = Depends(
+        require_roles(UserGroupEnum.ADMIN, UserGroupEnum.MODERATOR)
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update the details of a specific movie by its ID.
+
+    This endpoint allows authorized users (admins or moderators) to update any subset of a movie's attributes.
+    The response includes the updated movie details.
+
+    :param movie_id: The unique identifier of the movie to update.
+    :type movie_id: int
+    :param movie_data: The data to update the movie with.
+    :type movie_data: MovieCreateSchema
+    :param db: The SQLAlchemy async database session (provided via dependency injection).
+    :type db: AsyncSession
+
+    :return: The updated movie details.
+    :rtype: MovieDetailSchema
+
+    :raises HTTPException:
+        - 400 if input data is invalid (e.g., violating a constraint).
+        - 404 if the movie with the specified ID is not found.
+    """
+    return await update_movie_service(movie_id=movie_id, movie_data=movie_data, db=db)
+
+
+@router.patch(
+    "/{movie_id}/",
+    response_model=MovieDetailSchema,
+    summary="Partially update movie details by ID",
+    description=(
+        "<h3>This endpoint allows admins or moderators to partially update the details of a specific movie by its ID. Clients can provide any subset of the movie's attributes to update. The response includes the updated movie details.</h3>"
+    ),
+    responses={
+        200: {
+            "description": "Movie updated successfully.",
+        },
+        400: {
+            "description": "Invalid input.",
+            "content": {
+                "application/json": {"example": {"detail": "Invalid input data."}}
+            },
+        },
+        404: {
+            "description": "Movie not found.",
+            "content": {
+                "application/json": {"example": {"detail": "Movie not found."}}
+            },
+        },
+    },
+)
+async def partially_update_movie(
+    movie_id: int,
+    movie_data: MoviePartiallyUpdateSchema,
+    current_user: UserModel = Depends(
+        require_roles(UserGroupEnum.ADMIN, UserGroupEnum.MODERATOR)
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Partially update the details of a specific movie by its ID.
+
+    This endpoint allows authorized users (admins or moderators) to partially update any subset of a movie's attributes.
+    The response includes the updated movie details.
+
+    :param movie_id: The unique identifier of the movie to update.
+    :type movie_id: int
+    :param movie_data: The data to update the movie with.
+    :type movie_data: MovieCreateSchema
+    :param db: The SQLAlchemy async database session (provided via dependency injection).
+    :type db: AsyncSession
+
+    :return: The updated movie details.
+    :rtype: MovieDetailSchema
+
+    :raises HTTPException:
+        - 400 if input data is invalid (e.g., violating a constraint).
+        - 404 if the movie with the specified ID is not found.
+    """
+    return await partially_update_movie_service(
+        movie_id=movie_id, movie_data=movie_data, db=db
+    )
+
+
 @router.delete(
     "/{movie_id}/",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -164,7 +292,7 @@ async def get_movie_detail(movie_id: int, db: AsyncSession = Depends(get_db)):
                 "application/json": {"example": {"detail": "Movie not found."}}
             },
         },
-    }
+    },
 )
 async def delete_movie(
     movie_id: int,

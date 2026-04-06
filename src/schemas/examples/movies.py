@@ -67,11 +67,17 @@ movie_detail_schema_example = {
 }
 
 movie_update_schema_example = {
-    "name": "Update Movie",
-    "year": 2026,
-    "imdb": 8.7,
-    "meta_score": 80.0,
-    "description": "Updated movie description.",
-    "price": "17.99",
-    "genre_names": ["Comedy", "Action", "Adventure"],
+    "name": "New Movie",
+    "year": 2025,
+    "time": 126,
+    "imdb": 8.5,
+    "votes": 125000,
+    "meta_score": 77.0,
+    "gross": 154000000.0,
+    "description": "An amazing movie.",
+    "price": "19.99",
+    "certification_id": 1,
+    "genre_ids": [1, 2],
+    "star_ids": [1, 2],
+    "director_ids": [1],
 }
