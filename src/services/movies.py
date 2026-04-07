@@ -1,3 +1,4 @@
+from decimal import Decimal
 import re
 
 from fastapi import HTTPException, status
@@ -24,6 +25,7 @@ from schemas import (
     MovieUpdateSchema,
     MoviePartiallyUpdateSchema,
 )
+from core.constants import ALLOWED_SORT_FIELDS
 
 CONSTRAINT_ERRORS = {
     "unique_movie_constraint": (
@@ -64,6 +66,25 @@ def extract_constraint_name(err):
 async def get_movie_list_service(
     page: int,
     per_page: int,
+    name: str | None,
+    description: str | None,
+    certification: str | None,
+    genre: str | None,
+    star: str | None,
+    director: str | None,
+    year_min: int | None,
+    year_max: int | None,
+    time_min: int | None,
+    time_max: int | None,
+    imdb_min: float | None,
+    imdb_max: float | None,
+    votes_min: int | None,
+    votes_max: int | None,
+    meta_score_min: float | None,
+    meta_score_max: float | None,
+    gross_min: float | None,
+    gross_max: float | None,
+    order_by: str | None,
     db: AsyncSession,
 ) -> MovieListResponseSchema:
     offset = (page - 1) * per_page
@@ -71,9 +92,40 @@ async def get_movie_list_service(
     total_items = await get_movies_quantity(db)
 
     if not total_items:
-        raise HTTPException(status_code=404, detail="No movies found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No movies found."
+        )
 
-    movies = await get_movies(db, offset, per_page)
+    if order_by and order_by.lstrip("-") not in ALLOWED_SORT_FIELDS.keys():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid order_by query data",
+        )
+
+    movies = await get_movies(
+        db=db,
+        offset=offset,
+        name=name,
+        description=description,
+        certification=certification,
+        star=star,
+        genre=genre,
+        director=director,
+        per_page=per_page,
+        year_min=year_min,
+        year_max=year_max,
+        time_min=time_min,
+        time_max=time_max,
+        imdb_min=imdb_min,
+        imdb_max=imdb_max,
+        votes_min=votes_min,
+        votes_max=votes_max,
+        meta_score_min=meta_score_min,
+        meta_score_max=meta_score_max,
+        gross_min=gross_min,
+        gross_max=gross_max,
+        order_by=order_by,
+    )
 
     if not movies:
         raise HTTPException(status_code=404, detail="No movies found.")

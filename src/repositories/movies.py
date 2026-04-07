@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -10,6 +10,7 @@ from database import (
     DirectorModel,
 )
 from schemas import MovieCreateSchema, MovieUpdateSchema, MoviePartiallyUpdateSchema
+from core.constants import ALLOWED_SORT_FIELDS
 
 
 async def get_genre_by_id(db: AsyncSession, genre_id: int):
@@ -122,14 +123,102 @@ async def create_director(db: AsyncSession, name: str):
     return new_director
 
 
-async def get_movies(db: AsyncSession, offset: int, per_page: int) -> list[MovieModel]:
-    order_by = MovieModel.default_order_by()
+async def get_movies(
+    db: AsyncSession,
+    offset: int,
+    per_page: int,
+    name: str | None,
+    description: str | None,
+    certification: str | None,
+    genre: str | None,
+    star: str | None,
+    director: str | None,
+    year_min: int | None,
+    year_max: int | None,
+    time_min: int | None,
+    time_max: int | None,
+    imdb_min: float | None,
+    imdb_max: float | None,
+    votes_min: int | None,
+    votes_max: int | None,
+    meta_score_min: int | None,
+    meta_score_max: int | None,
+    gross_min: int | None,
+    gross_max: int | None,
+    order_by: str | None,
+) -> list[MovieModel]:
     stmt = select(MovieModel)
-    if order_by:
-        stmt = stmt.order_by(*order_by)
-    stmt = stmt.offset(offset).limit(per_page)
 
-    result_movies = await db.execute(stmt)
+    search_conditions = []
+    if name:
+        search_conditions.append(MovieModel.name.ilike(f"%{name}%"))
+    if description:
+        search_conditions.append(MovieModel.description.ilike(f"%{description}%"))
+    if search_conditions:
+        stmt = stmt.where(or_(*search_conditions))
+
+    if certification:
+        stmt = stmt.where(MovieModel.certification.has(name=certification))
+
+    if genre:
+        stmt = stmt.where(MovieModel.genres.any(GenreModel.name.ilike(f"%{genre}%")))
+
+    if star:
+        stmt = stmt.where(MovieModel.stars.any(StarModel.name.ilike(f"%{star}%")))
+
+    if director:
+        stmt = stmt.where(
+            MovieModel.directors.any(DirectorModel.name.ilike(f"%{director}%"))
+        )
+
+    if year_min is not None:
+        stmt = stmt.where(MovieModel.year >= year_min)
+    if year_max is not None:
+        stmt = stmt.where(MovieModel.year <= year_max)
+    if time_min is not None:
+        stmt = stmt.where(MovieModel.time >= time_min)
+    if time_max is not None:
+        stmt = stmt.where(MovieModel.time <= time_max)
+    if imdb_min is not None:
+        stmt = stmt.where(MovieModel.imdb >= imdb_min)
+    if imdb_max is not None:
+        stmt = stmt.where(MovieModel.imdb <= imdb_max)
+    if votes_min is not None:
+        stmt = stmt.where(MovieModel.votes >= votes_min)
+    if votes_max is not None:
+        stmt = stmt.where(MovieModel.votes <= votes_max)
+    if meta_score_min is not None:
+        stmt = stmt.where(MovieModel.meta_score >= meta_score_min)
+    if meta_score_max is not None:
+        stmt = stmt.where(MovieModel.meta_score <= meta_score_max)
+    if gross_min is not None:
+        stmt = stmt.where(MovieModel.gross >= gross_min)
+    if gross_max is not None:
+        stmt = stmt.where(MovieModel.gross <= gross_max)
+
+    if order_by is not None:
+        if order_by.startswith("-"):
+            sort_field = ALLOWED_SORT_FIELDS.get(order_by.lstrip("-"))
+            if sort_field:
+                stmt = stmt.order_by(desc(sort_field))
+        else:
+            sort_field = ALLOWED_SORT_FIELDS.get(order_by)
+            if sort_field:
+                stmt = stmt.order_by(sort_field)
+    else:
+        default_order = MovieModel.default_order_by()
+        if default_order:
+            stmt = stmt.order_by(*default_order)
+
+    stmt = stmt.offset(offset).limit(per_page)
+    result_movies = await db.execute(
+        stmt.options(
+            selectinload(MovieModel.genres),
+            selectinload(MovieModel.certification),
+            selectinload(MovieModel.stars),
+            selectinload(MovieModel.directors),
+        )
+    )
     return result_movies.scalars().all()
 
 

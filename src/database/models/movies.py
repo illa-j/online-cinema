@@ -1,5 +1,6 @@
 from typing import Optional
 from uuid import UUID, uuid4
+from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
@@ -136,7 +137,7 @@ class MovieModel(Base):
     meta_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     gross: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     description: Mapped[str] = mapped_column(String(10_000), nullable=False)
-    price: Mapped[float] = mapped_column(DECIMAL(10, 2), nullable=False)
+    price: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
 
     certification_id: Mapped[int] = mapped_column(
         ForeignKey("certifications.id"), nullable=False
@@ -156,6 +157,22 @@ class MovieModel(Base):
     directors: Mapped[list["DirectorModel"]] = relationship(
         "DirectorModel", secondary=MoviesDirectorsModel, back_populates="movies"
     )
+
+    @property
+    def certification_name(self) -> str | None:
+        return self.certification.name if self.certification else None
+
+    @property
+    def genre_names(self) -> list[str]:
+        return [genre.name for genre in self.genres] if self.genres else []
+
+    @property
+    def star_names(self) -> list[str]:
+        return [star.name for star in self.stars] if self.stars else []
+
+    @property
+    def director_names(self) -> list[str]:
+        return [director.name for director in self.directors] if self.directors else []
 
     __table_args__ = (
         UniqueConstraint("name", "year", "time", name="unique_movie_constraint"),

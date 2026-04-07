@@ -148,6 +148,15 @@ class MovieListItemSchema(BaseModel):
     id: int
     uuid: UUID
     name: str
+    description: str
+
+    @field_validator("description")
+    @classmethod
+    def truncate_description(cls, v):
+        if v and len(v) > 200:
+            return v[:200] + "..."
+        return v
+
     year: int
     time: int
     imdb: float
@@ -155,6 +164,10 @@ class MovieListItemSchema(BaseModel):
     meta_score: Optional[float]
     gross: Optional[float]
     price: Decimal
+    certification_name: str
+    genre_names: list[str]
+    star_names: list[str]
+    director_names: list[str]
 
     model_config = {
         "from_attributes": True,

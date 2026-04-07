@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +46,45 @@ router = APIRouter()
 async def get_movie_list(
     page: int = Query(1, ge=1, description="Page number (1-based index)"),
     per_page: int = Query(10, ge=1, le=20, description="Number of items per page"),
+    name: str | None = Query(None, description="Search by name."),
+    description: str | None = Query(None, description="Search by description."),
+    certification: str | None = Query(
+        None, description="Search by certification name."
+    ),
+    star: str | None = Query(None, description="Search by star name."),
+    genre: str | None = Query(None, description="Search by genre name"),
+    director: str | None = Query(None, description="Search by director name"),
+    year_min: int | None = Query(
+        None, ge=1800, description="Minimum release year of the movie"
+    ),
+    year_max: int | None = Query(
+        None, ge=1800, description="Maximum release year of the movie"
+    ),
+    time_min: int | None = Query(
+        None, ge=0, description="Minimum movie duration in minutes"
+    ),
+    time_max: int | None = Query(
+        None, ge=0, description="Maximum movie duration in minutes"
+    ),
+    imdb_min: float | None = Query(
+        None, ge=0, le=10, description="Minimum IMDb rating"
+    ),
+    imdb_max: float | None = Query(
+        None, ge=0, le=10, description="Maximum IMDb rating"
+    ),
+    votes_min: int | None = Query(None, ge=0, description="Minimum number of votes"),
+    votes_max: int | None = Query(None, ge=0, description="Maximum number of votes"),
+    meta_score_min: float | None = Query(
+        None, ge=0, le=100, description="Minimum Metascore"
+    ),
+    meta_score_max: float | None = Query(
+        None, ge=0, le=100, description="Maximum Metascore"
+    ),
+    gross_min: float | None = Query(None, ge=0, description="Minimum gross revenue"),
+    gross_max: float | None = Query(None, ge=0, description="Maximum gross revenue"),
+    order_by: str | None = Query(
+        None, description="Order by (year, time, imdb, votes, meta_score, gross, price)"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -65,7 +106,30 @@ async def get_movie_list(
 
     :raises HTTPException: Raises a 404 error if no movies are found for the requested page.
     """
-    return await get_movie_list_service(page=page, per_page=per_page, db=db)
+    return await get_movie_list_service(
+        page=page,
+        per_page=per_page,
+        name=name,
+        description=description,
+        certification=certification,
+        star=star,
+        genre=genre,
+        director=director,
+        year_min=year_min,
+        year_max=year_max,
+        time_min=time_min,
+        time_max=time_max,
+        imdb_min=imdb_min,
+        imdb_max=imdb_max,
+        votes_min=votes_min,
+        votes_max=votes_max,
+        meta_score_min=meta_score_min,
+        meta_score_max=meta_score_max,
+        gross_min=gross_min,
+        gross_max=gross_max,
+        order_by=order_by,
+        db=db,
+    )
 
 
 @router.post(
